@@ -83,3 +83,13 @@ lint or a hook.
 - **`xargs -n1` defaults to `echo`,** which eats `-n`. Use `xargs -n1 printf '%s\n'`.
 - **GNU sed rejects a literal newline** passed through a shell variable in a
   replacement. Use `\n`.
+- **Scope a guard to the hazard, not to a convenient boundary.** The write guard
+  first refused every path outside the repo root. That would have blocked the
+  scratchpad the harness tells agents to use, while protecting nothing extra —
+  the targets actually worth refusing (shell profiles, SSH keys, the agent's own
+  global config) live under `$HOME`. Writes now use an allow-list of roots
+  (repo + temp); deletes stay repo-only, because destroying something outside
+  the project is never the agent's call.
+- **On Git Bash, `cygpath -u "$TEMP"` is `/tmp`.** The Windows temp directory is
+  mounted there, so `TMPDIR`, `TEMP`, `TMP`, and `/tmp` collapse to one root.
+  A short roots list is correct, not a dropped entry — verify before "fixing" it.

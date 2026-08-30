@@ -85,7 +85,9 @@ must_refuse "git filter-branch"            Bash command "git filter-branch -f --
 must_refuse "rm outside the repo root"     Bash command "rm -rf /c/Users/rbsmi/AppData/Local/Temp/scratch"
 must_refuse "mv outside the repo root"     Bash command "mv README.md ../elsewhere/README.md"
 must_refuse "destructive op after &&"      Bash command "npm ci && rm -rf dist"
-must_refuse "Write outside the repo root"  Write file_path "/c/Users/rbsmi/evil.txt"
+must_refuse "Write to a home dotfile"      Write file_path "$HOME/.bashrc"
+must_refuse "Write to the agent's config"  Write file_path "$HOME/.claude/settings.json"
+must_refuse "Write to a sibling project"   Write file_path "/d/Projects/other-project/index.ts"
 
 printf '\n=== MUST PASS (false-positive direction) ===\n'
 must_pass "the word clean in a string"     Bash command 'echo "time to clean up"'
@@ -99,6 +101,12 @@ must_pass "ordinary commit"                Bash command 'git commit -m "ci: add 
 must_pass "npm ci"                         Bash command "npm ci"
 must_pass "non-recursive rm in repo"       Bash command "rm .tests-locked"
 must_pass "Write inside the repo"          Write file_path "docs/plans/STAGE-PLAN.md"
+must_pass "Write to the session scratchpad" Write file_path "${TEMP:-/tmp}/claude/scratchpad/notes.md"
+# The Write tool sends Windows paths forward-slashed, which is a different
+# to_posix branch from the backslashed value of $TEMP. Both must resolve.
+must_pass "scratchpad, forward-slash form" Write file_path "C:/Users/rbsmi/AppData/Local/Temp/claude/scratchpad/notes.md"
+must_pass "Write to /tmp"                  Write file_path "/tmp/analysis.json"
+must_pass "Edit a scratch file"            Edit file_path "${TMPDIR:-${TEMP:-/tmp}}/draft.md"
 
 printf '\n=== SUMMARY: %s passed, %s failed ===\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
