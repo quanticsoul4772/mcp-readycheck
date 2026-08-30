@@ -17,11 +17,8 @@ coverage/
 .eslintcache
 
 # Environment
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env*
+!.env.example
 
 # Logs
 *.log
@@ -42,3 +39,5 @@ Thumbs.db
 *.swo
 *~
 
+# Session handoff
+PROGRESS.md
