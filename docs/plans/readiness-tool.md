@@ -12,7 +12,7 @@ correction is raised as a question rather than silently applied.
 
 ## Uncertainty protocol
 
-Three questions are **blocking** — each changes the shape of the work, and two
+Four questions are **blocking** — each changes the shape of the work, and three
 of them contradict the goal text, so they cannot be resolved by assumption.
 The rest are stated and carried forward.
 
@@ -94,20 +94,58 @@ changes. The plan therefore rests the split on three grounds that did survive:
 
 Confirm the OUTCOME's wording is amended, or tell me to keep it as written.
 
-### Q4 — carried. Binding a view name whose directory does not exist.
+### Q4 — BLOCKING. A view binding with no directory crashes the server at mount.
 
 The goal says bind `view: { name: ... }` now and build nothing else; AGENTS.md
-says the directory name must match. Reading the SDK's `views/*.d.ts` did not
-settle whether a missing directory fails the build.
+says the directory name must match. This was first recorded as a carried
+uncertainty to be settled by experiment. Reading the SDK settled it instead, and
+the answer is worse than expected.
 
-> **decide — recommended: declare the binding now with no directory, *after*
-> empirically confirming build and typecheck pass. Runner-up: create a minimal
-> placeholder directory (scored 23 lower). Confidence 0.615.**
+> **verify — refuted (read of the compiled bundle, confidence: certain).**
+> `mcp-use@2.3.3` has a private `#validateViewBindingsAtMount()` which throws:
+>
+> ```
+> Tool "X" is bound to view "Y" but no views were primed.
+>   Run `mcp-use build` and deploy the built entry, or in dev let the CLI
+>   prime views automatically.
+> ```
+>
+> and a second throw for a tool bound to a view "which is not in the primed
+> views registry". The views registry is a manifest keyed by view *directory*
+> name, primed from build/dev registry data.
 
-Not blocking because it is empirically settleable in one command during Stage 3.
-Step 0 of the TDD sequence is that experiment. If build or typecheck fails, the
-binding is deferred to G2 and this plan is amended — the view name is recorded
-here either way as `audit-report`.
+The failure is **at mount — server startup — not at build.** That matters more
+than the failure itself: CI runs only `typecheck` and `build`, so a binding with
+no matching directory goes **green in CI and then crashes the deployed server**.
+The original decide record recommended exactly that, gated on "build and
+typecheck pass". They would have passed. The gate was measuring the wrong thing.
+
+> **decide (re-run with the mount-time evidence) — recommended: create a minimal
+> placeholder view directory now, score 72. Runner-up: defer the binding to G2
+> entirely, score 68. Confidence 0.52.**
+
+**Why this is a question and not a decision.** A four-point gap at 0.52
+confidence is a coin-flip, and the two options trade different things: the
+recommendation satisfies the goal's "bind the name now" but creates a
+placeholder view that the goal's own OUT list assigns to G2; the runner-up keeps
+the scope boundary clean but leaves the instruction unmet. Options:
+
+- **(a)** Defer the binding and the directory together to G2. `start_audit`
+  ships in G1 with `outputSchema` and no `view`. Nothing crashes, nothing
+  crosses into G2, the goal's bind-now instruction goes unmet.
+- **(b)** Bind `view: { name: "audit-report" }` now and add
+  `views/audit-report/view.tsx` as a minimal placeholder so the registry primes.
+  Instruction met, at the cost of building a piece of G2.
+
+**Recommendation: (a),** narrowly and against the decide record's own ranking —
+the scope boundary is the thing the goal was most explicit about, and a
+placeholder view is the kind of interim artifact that outlives its excuse. Needs
+your call either way.
+
+**Related observation, out of scope to fix here.** CI cannot catch this class of
+defect: it typechecks and builds but never mounts the server. A job that mounts
+and lists tools would have caught it. Recording it rather than acting on it —
+`.github/workflows/ci.yml` is not in this plan's files-to-touch.
 
 ### Q5 — carried. Real `category` and `severity` values are still unknown.
 
@@ -205,7 +243,12 @@ mistake AGENTS.md already records; because mcp-use validates `structuredContent`
 against `outputSchema` at runtime, an over-narrow schema converts a valid API
 response into a tool failure.
 
-**D4 — view binding.** Conditional; see Q4. *Confidence 0.615.*
+**D4 — view binding.** Unresolved; see Q4. The first decide record (0.615)
+recommended binding with no directory, gated on build and typecheck passing.
+That gate was refuted: the SDK throws at *mount*, which neither command
+reaches. The re-run (0.52, a 72–68 near-tie) recommends a placeholder
+directory; the plan recommends deferring instead, on scope grounds.
+**Gate A must settle this.**
 
 **D5 — absent `checks`.** *Recommended:* mirror the API — emit `checks` only
 when present, declare it optional. *Runner-up:* substitute `[]` (scored 63
@@ -277,9 +320,11 @@ lifecycle is already covered by the live tests.
 
 ## Phased TDD steps
 
-0. **Experiment, not a test.** Add a view binding for a directory that does not
-   exist; run `npm run typecheck` and `npm run build`. Record the result. This
-   settles Q4 before any code depends on the answer.
+0. ~~Experiment: bind a nonexistent view, run typecheck and build.~~ Removed —
+   the experiment would have reported success and been wrong, because the
+   binding fails at mount and neither command mounts the server. Q4 is settled
+   by reading the SDK instead; what remains is your choice between its two
+   options, not a measurement.
 1. T11, T12 first — the key guard, before any network path exists. Add
    `requireApiKey()`.
 2. T7, T8, T9 — the error path. Add the fetch wrapper that raises on non-2xx
