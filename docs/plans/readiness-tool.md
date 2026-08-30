@@ -12,9 +12,17 @@ correction is raised as a question rather than silently applied.
 
 ## Uncertainty protocol
 
-Four questions are **blocking** — each changes the shape of the work, and three
-of them contradict the goal text, so they cannot be resolved by assumption.
-The rest are stated and carried forward.
+Four questions were **blocking**. **All four were resolved by the human at
+Gate A on 2026-08-30**; each resolution is recorded inline below, and the
+resolution is what the implementation follows. The rest are stated and carried
+forward.
+
+| # | Resolution at Gate A |
+|---|---|
+| Q1 | `get_audit(serverId, auditId)` — explicit, symmetric with `start_audit` |
+| Q2 | `visibility: "app"` (string) |
+| Q3 | OUTCOME amended: "no tool call waits on audit completion; each call is one bounded API round-trip." The split stands on STAGE-PLAN correction 5 |
+| Q4 | No view binding in G1; G2 adds `view: { name }` together with the directory |
 
 ### Q1 — BLOCKING. `get_audit` cannot take `auditId` alone.
 
@@ -53,7 +61,11 @@ found" — a correct-looking error for a wrong-parameter bug. Options:
   and explicit, at the cost of the goal's stated signature.
 
 **Recommendation: (c).** It is the only option under which the two tools agree
-about what a server id is. Needs your call.
+about what a server id is.
+
+> **RESOLVED at Gate A — (c).** `get_audit(serverId, auditId)`, explicit and
+> symmetric with `start_audit`. The decide record's recommendation (b) is
+> overridden; the module constant is not used.
 
 ### Q2 — BLOCKING. `visibility: ["app"]` is not the SDK's type.
 
@@ -65,7 +77,8 @@ about what a server id is. Needs your call.
 
 Writing `visibility: ["app"]` is a type error. The plan uses
 `visibility: "app"`, which produces the array the goal describes on the wire.
-Confirm this reading of the goal's intent.
+
+> **RESOLVED at Gate A.** `visibility: "app"` (string).
 
 ### Q3 — BLOCKING. There is no 60-second host ceiling.
 
@@ -92,7 +105,10 @@ changes. The plan therefore rests the split on three grounds that did survive:
    nothing to render until it finishes", and makes the timeout case
    unrenderable.
 
-Confirm the OUTCOME's wording is amended, or tell me to keep it as written.
+> **RESOLVED at Gate A.** The OUTCOME is amended to read: *"no tool call waits
+> on audit completion; each call is one bounded API round-trip."* The split
+> stands on STAGE-PLAN correction 5. The 60-second figure is not used as a
+> justification anywhere in the implementation.
 
 ### Q4 — BLOCKING. A view binding with no directory crashes the server at mount.
 
@@ -139,8 +155,12 @@ the scope boundary clean but leaves the instruction unmet. Options:
 
 **Recommendation: (a),** narrowly and against the decide record's own ranking —
 the scope boundary is the thing the goal was most explicit about, and a
-placeholder view is the kind of interim artifact that outlives its excuse. Needs
-your call either way.
+placeholder view is the kind of interim artifact that outlives its excuse.
+
+> **RESOLVED at Gate A — (a).** No view binding in G1. `start_audit` ships with
+> `outputSchema` and no `view`. G2 adds `view: { name: "audit-report" }`
+> together with `views/audit-report/`. The re-run decide's recommendation is
+> overridden; no placeholder directory is created.
 
 **Related observation, out of scope to fix here.** CI cannot catch this class of
 defect: it typechecks and builds but never mounts the server. A job that mounts
@@ -227,8 +247,10 @@ with an audit's `running`).
 Every choice below carries a decide record. A choice without one is a defect the
 evaluator must BLOCK on.
 
-**D1 — `get_audit` parameter shape.** Unresolved; see Q1. Recommended (c),
-against the decide's (b), for the stated reason. **Gate A must settle this.**
+**D1 — `get_audit` parameter shape.** **Settled at Gate A: (c),
+`get_audit(serverId, auditId)`.** The decide record recommended a module
+constant at 0.665; the plan argued against it on the mismatch hazard and the
+human agreed. Recorded because the decide record and the outcome differ.
 
 **D2 — resolve `deploymentId` explicitly.** *Recommended:* GET the server
 record, then POST `deploymentId` explicitly; fail closed when it is `null`.
@@ -243,12 +265,12 @@ mistake AGENTS.md already records; because mcp-use validates `structuredContent`
 against `outputSchema` at runtime, an over-narrow schema converts a valid API
 response into a tool failure.
 
-**D4 — view binding.** Unresolved; see Q4. The first decide record (0.615)
-recommended binding with no directory, gated on build and typecheck passing.
-That gate was refuted: the SDK throws at *mount*, which neither command
-reaches. The re-run (0.52, a 72–68 near-tie) recommends a placeholder
-directory; the plan recommends deferring instead, on scope grounds.
-**Gate A must settle this.**
+**D4 — view binding.** **Settled at Gate A: defer to G2.** The first decide
+record (0.615) recommended binding with no directory, gated on build and
+typecheck passing; that gate was refuted, because the SDK throws at *mount*,
+which neither command reaches. The re-run (0.52, a 72–68 near-tie) recommended
+a placeholder directory. Both are overridden: no binding, no placeholder.
+Recorded because the outcome differs from both decide records.
 
 **D5 — absent `checks`.** *Recommended:* mirror the API — emit `checks` only
 when present, declare it optional. *Runner-up:* substitute `[]` (scored 63
