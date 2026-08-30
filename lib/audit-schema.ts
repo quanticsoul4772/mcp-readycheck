@@ -65,6 +65,16 @@ export const auditOutputSchema = z.object({
     .boolean()
     .nullable()
     .describe("Whether the audit judged the server ready for Claude.ai; null until decided"),
+  targetUrl: z
+    .string()
+    .describe("The endpoint the audit ran against — server-derived, never an input"),
+  errorMessage: z
+    .string()
+    .nullable()
+    .describe(
+      "Why the audit failed, when it did. Null otherwise. Without this a failed " +
+        "audit reports only that it failed, and the cause the API supplied is lost",
+    ),
   checks: z
     .array(checkSchema)
     .optional()
@@ -112,6 +122,8 @@ export function mapAuditResponse(audit: RawAudit): AuditOutput {
     status: auditStatusSchema.parse(audit.status),
     isReadyForChatgpt: audit.isReadyForChatgpt,
     isReadyForClaudeai: audit.isReadyForClaudeai,
+    targetUrl: audit.targetUrl,
+    errorMessage: audit.errorMessage,
     ...(audit.checks === undefined ? {} : { checks: audit.checks.map(mapCheck) }),
   };
 }

@@ -197,8 +197,14 @@ export const startAudit = server.tool(
       "Returns an auditId immediately; read the result with get_audit.",
     inputSchema: startAuditInputSchema,
     outputSchema: startAuditOutputSchema,
+    // readOnlyHint is false, against the goal text's `true`: this POSTs and
+    // creates a persistent audit record on an external service, which is
+    // exactly what the annotation denies. A host that auto-approves read-only
+    // tools would let the model create unbounded audits unprompted.
+    // destructiveHint stays false — creating a record is additive, not
+    // destructive — and openWorldHint stays true.
     annotations: {
-      readOnlyHint: true,
+      readOnlyHint: false,
       destructiveHint: false,
       openWorldHint: true,
     },
@@ -215,7 +221,13 @@ export const getAudit = server.tool(
       "categories the API returns.",
     inputSchema: getAuditInputSchema,
     outputSchema: auditOutputSchema,
-    visibility: "app",
+    // `visibility: "app"` is deliberately omitted in G1. The SDK defines "app"
+    // as "app-private helper tools callable from views via useCallTool while
+    // the host hides them from the model" — and G1 ships no view. Declaring it
+    // now would leave get_audit callable by nothing: hidden from the model,
+    // with no view to call it from, which contradicts the OUTCOME's
+    // requirement that both tools be callable. G2 adds it back alongside
+    // views/audit-report/.
     annotations: {
       readOnlyHint: true,
       destructiveHint: false,

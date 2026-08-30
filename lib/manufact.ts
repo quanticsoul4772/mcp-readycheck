@@ -146,10 +146,17 @@ export async function manufactFetch<T>(path: string, init?: RequestInit): Promis
  * Throws when it is null: an audit with no deployment to point at is not a
  * thing worth creating, and a silent default would be a fallback.
  */
+/** The server record. `mcpUrl` is the API's own statement of where this server answers. */
+export async function fetchServer(serverId: string): Promise<{
+  activeDeploymentId: string | null;
+  mcpUrl: string;
+  status: string;
+}> {
+  return manufactFetch(`/api/v1/servers/${encodeURIComponent(serverId)}`);
+}
+
 export async function resolveActiveDeploymentId(serverId: string): Promise<string> {
-  const server = await manufactFetch<{ activeDeploymentId: string | null }>(
-    `/api/v1/servers/${encodeURIComponent(serverId)}`,
-  );
+  const server = await fetchServer(serverId);
 
   if (!server.activeDeploymentId) {
     throw new Error(
