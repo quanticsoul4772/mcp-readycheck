@@ -90,6 +90,17 @@ lint or a hook.
   global config) live under `$HOME`. Writes now use an allow-list of roots
   (repo + temp); deletes stay repo-only, because destroying something outside
   the project is never the agent's call.
+- **A SessionStart hook cannot show the user anything.** Its stdout is added to
+  Claude's context, and `systemMessage` is too — the docs say it is "not shown
+  to the user directly." `bearings.sh` was firing on every `startup` and
+  `clear` the whole time it was reported dead; the only visible surface a
+  SessionStart hook has is `statusMessage`, the spinner label while it runs.
+  Confirm a session hook ran by finding its `hook_success` attachment in
+  `~/.claude/projects/<slug>/*.jsonl`, never by looking at the terminal.
+- **`session_kind` has five values, not four:** `startup`, `resume`, `clear`,
+  `compact`, `fork`. A matcher of letters and `|` is a list of exact strings,
+  not a regex, so an omitted value fails silently — that session just gets no
+  hook. `sessionstart-registration.test.sh` now asserts all five.
 - **On Git Bash, `cygpath -u "$TEMP"` is `/tmp`.** The Windows temp directory is
   mounted there, so `TMPDIR`, `TEMP`, `TMP`, and `/tmp` collapse to one root.
   A short roots list is correct, not a dropped entry — verify before "fixing" it.
