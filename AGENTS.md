@@ -101,6 +101,25 @@ lint or a hook.
   `compact`, `fork`. A matcher of letters and `|` is a list of exact strings,
   not a regex, so an omitted value fails silently — that session just gets no
   hook. `sessionstart-registration.test.sh` now asserts all five.
+- **Close the bypass surface, not the tool.** The harness prompts before an Edit
+  or Write to `.claude/hooks/**` or `.claude/settings.json`. Bash prompts for
+  nothing, so a redirection, a `tee`, a `cp`/`mv`/`install` destination or a
+  `sed -i` was a way around that prompt — including a way to switch off the
+  guard doing the checking. Those forms are refused now; reads are untouched, so
+  `cat`, `grep`, `git diff` and running the suites all still work. Still open:
+  an interpreter here-document that writes through its own file API
+  (`python - <<'PY' ... open(".claude/hooks/x", "w") ... PY`). Detecting that
+  means reading the embedded program, which no regex does honestly.
+- **Split a command line on unquoted separators only.** The guard first cut the
+  line on every `|`, which is also the delimiter people reach for in
+  `sed -i 's|a|b|' file` once the pattern contains a slash. The filename landed
+  in a fragment the verb checks never saw, and an in-place edit of a hook went
+  through. Found by tripping it while writing the guard, not by reading it.
+- **A whole-command regex net is not a substitute for parsing.** The first fix
+  for the above scanned the entire command for `sed` plus `-i` plus a protected
+  path. `grep -n 'sed -i.bak' <a hook file>` then matched all three and was
+  refused — a false positive on a read. Fix the tokenizer instead of adding a
+  second, blunter matcher on top of it.
 - **On Git Bash, `cygpath -u "$TEMP"` is `/tmp`.** The Windows temp directory is
   mounted there, so `TMPDIR`, `TEMP`, `TMP`, and `/tmp` collapse to one root.
   A short roots list is correct, not a dropped entry — verify before "fixing" it.

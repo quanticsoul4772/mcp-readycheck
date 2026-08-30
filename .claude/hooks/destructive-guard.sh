@@ -181,6 +181,87 @@ non_flags() {
   done
 }
 
+
+# --- self-protection -------------------------------------------------------
+# Editing .claude/hooks/** or .claude/settings.json through the Edit or Write
+# tool raises the harness's own confirmation. Through Bash it raises nothing,
+# so a redirection, a copy or an in-place sed is a way around that prompt —
+# including a way to disable this guard. Reads are deliberately untouched:
+# nothing below fires unless the command writes.
+
+# Any .claude/hooks or .claude/settings.json qualifies, not only this
+# repository's. Rewriting some other checkout's hooks is the same act, and
+# matching on the shape rather than on a resolved root keeps the check honest
+# when the Bash tool's working directory is not the hook's.
+is_protected() {
+  case "$1" in
+    -*) return 1 ;;
+  esac
+  p=$(printf '%s' "$1" | tr '\134' '/')
+  case "$p" in
+    *.claude/hooks|*.claude/hooks/*) return 0 ;;
+    *.claude/settings.json) return 0 ;;
+  esac
+  return 1
+}
+
+check_self_protect() {
+  verb=$1
+  shift
+  bad=""
+  for tok in "$@"; do
+    if is_protected "$tok"; then
+      bad="$bad$tok
+"
+    fi
+  done
+  if [ -n "$bad" ]; then
+    block "$verb the agent's own hooks or settings, which Bash does not prompt for" "$SEGMENT" "$bad"
+  fi
+  return 0
+}
+
+# The destination of a copy is the write; the sources are reads.
+last_operand() {
+  last=""
+  for t in "$@"; do
+    case "$t" in
+      -*) ;;
+      *) last=$t ;;
+    esac
+  done
+  printf '%s' "$last"
+}
+
+# A here-document body is data, not shell syntax. `cat > x <<EOF` puts its
+# target on the command line, so dropping the bodies keeps every real
+# redirection while stopping a document that merely quotes one from tripping
+# the guard.
+strip_heredoc_bodies() {
+  awk '
+    {
+      if (tag != "") {
+        line = $0
+        sub(/^[ \t]+/, "", line)
+        sub(/[ \t\r]+$/, "", line)
+        if (line == tag) tag = ""
+        next
+      }
+      print
+      s = $0
+      gsub(/<<</, "@", s)
+      if (match(s, /<<-?[ \t]*("[^"]*"|\047[^\047]*\047|[A-Za-z_][A-Za-z0-9_]*)/)) {
+        tag = substr(s, RSTART, RLENGTH)
+        sub(/^<<-?[ \t]*/, "", tag)
+        gsub(/["\047]/, "", tag)
+      }
+    }
+  '
+}
+
+# A redirect whose target is protected. The leading (^|[^->]) keeps an arrow in
+# prose ("--> .claude/hooks/README") from reading as a redirection.
+REDIR_RE='(^|[^->])>>?[[:space:]]*[^[:space:];|&<>]*\.claude/(hooks|settings\.json)'
 # --- file-writing tools ----------------------------------------------------
 case "$TOOL" in
   Edit|Write|NotebookEdit|MultiEdit)
@@ -200,10 +281,41 @@ esac
 [ "$TOOL" = "Bash" ] || exit 0
 [ -z "$CMD" ] && exit 0
 
+# Redirections, here-documents included, are checked against the whole command
+# rather than per segment: a redirect binds to its own command wherever in the
+# pipeline it sits.
+SCAN=$(printf '%s\n' "$CMD" | strip_heredoc_bodies | tr '\134' '/')
+if printf '%s\n' "$SCAN" | grep -qE "$REDIR_RE"; then
+  block "redirection writes to the agent's own hooks or settings, which Bash does not prompt for" \
+    "$CMD" "$(printf '%s\n' "$SCAN" | grep -oE "$REDIR_RE" | sed -E 's/^[^>]*>>?[[:space:]]*//')"
+fi
+
 # --- segment the command line ---------------------------------------------
 NL='
 '
-SEGMENTS=$(printf '%s' "$CMD" | sed -e 's/&&/\n/g' -e 's/||/\n/g' -e 's/;/\n/g' -e 's/|/\n/g')
+# Segment the command line on unquoted separators only. A naive split on "|"
+# also cuts through `sed s|a|b|`, which moves the filename into a fragment the
+# verb checks never see — the delimiter people reach for when the pattern
+# already contains a slash.
+SEGMENTS=$(printf '%s\n' "$CMD" | awk '
+  {
+    s = $0
+    out = ""
+    q = ""
+    for (i = 1; i <= length(s); i++) {
+      c = substr(s, i, 1)
+      if (q != "") {
+        if (c == q) q = ""
+        out = out c
+        continue
+      }
+      if (c == "\047" || c == "\"") { q = c; out = out c; continue }
+      if (c == "|" || c == ";" || c == "&") { out = out "\n"; continue }
+      out = out c
+    }
+    print out
+  }
+')
 
 OLDIFS=$IFS
 IFS=$NL
@@ -263,8 +375,28 @@ for SEGMENT in $SEGMENTS; do
       fi
       check_paths_outside "del" "$@"
       ;;
-    mv|cp)
-      check_paths_outside "$VERB" "$@"
+    tee)
+      check_self_protect "tee writes to" "$@"
+      ;;
+    mv)
+      # Both ends matter: moving a hook away removes it as surely as moving
+      # something over it replaces it.
+      check_self_protect "mv rewrites or removes" "$@"
+      check_paths_outside "mv" "$@"
+      ;;
+    cp)
+      dest=$(last_operand "$@")
+      [ -n "$dest" ] && check_self_protect "cp writes to" "$dest"
+      check_paths_outside "cp" "$@"
+      ;;
+    install)
+      dest=$(last_operand "$@")
+      [ -n "$dest" ] && check_self_protect "install writes to" "$dest"
+      ;;
+    sed)
+      if printf '%s\n' "$@" | grep -qE '^(-i|--in-place)'; then
+        check_self_protect "sed -i edits" "$@"
+      fi
       ;;
     git)
       # Skip git global options to reach the subcommand.
