@@ -11,6 +11,16 @@
   "hooks": {
     "PreToolUse": [
       {
+        "matcher": "Bash|Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "statusMessage": "attesting hooks",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/integrity.sh\""
+          }
+        ]
+      },
+      {
         "matcher": "Bash|Edit|Write|MultiEdit|NotebookEdit",
         "hooks": [
           {

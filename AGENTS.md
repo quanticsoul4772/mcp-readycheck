@@ -120,6 +120,29 @@ lint or a hook.
   path. `grep -n 'sed -i.bak' <a hook file>` then matched all three and was
   refused — a false positive on a read. Fix the tokenizer instead of adding a
   second, blunter matcher on top of it.
+- **An attester cannot attest itself.** `integrity.sh` compares every file in
+  `.claude/hooks` and the registration in `.claude/settings.json` against
+  committed HEAD before any tool call runs — its own file included. But it is
+  the thing doing the comparing: edit it, and the edited copy is what checks
+  the edit. Nothing inside the repository closes that. It is the exposure every
+  attester has, and it ends where they all end, at a human reading the diff on
+  the PR. What the hook buys is that a *silent* edit now has to survive review;
+  not that an edit is impossible.
+- **Mode drift is only visible where git records it.** `core.filemode` is false
+  here and the repo sits on a `posix=0` mount, so `chmod(1)` changes nothing a
+  guard could read — a fresh file cannot be made executable at all, and Git Bash
+  synthesises the displayed exec bit from the shebang, which is why
+  `sessionstart-registration.test.sh` is `100644` in the index and still shows
+  `-rwxr-xr-x`. Comparing the index mode against the filesystem would refuse a
+  clean tree. `git diff --cached` against HEAD is the comparison that means
+  something, and `git update-index --chmod` is how a test produces the drift.
+- **A guard that can brick the session needs its exit kept open.** Drift is
+  resolved by committing it, so `git add`, `git commit`, `git diff`,
+  `git status` and `git stash` stay available while everything else is refused —
+  but only as a single simple command, since a compound line can carry anything
+  after the git verb. The one refusal with no way out is a `hooks` key in the
+  gitignored `.claude/settings.local.json`: no commit brings it under review, so
+  only a human removing it clears the block.
 - **On Git Bash, `cygpath -u "$TEMP"` is `/tmp`.** The Windows temp directory is
   mounted there, so `TMPDIR`, `TEMP`, `TMP`, and `/tmp` collapse to one root.
   A short roots list is correct, not a dropped entry — verify before "fixing" it.
