@@ -1,4 +1,4 @@
-# ADR-0001: Accept the pr720 prerelease transitive dependency
+# ADR-0002: Accept the pr720 prerelease transitive dependency
 
 - Status: accepted
 - Date: 2026-08-30
