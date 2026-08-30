@@ -41,3 +41,9 @@ Thumbs.db
 
 # Session handoff
 PROGRESS.md
+
+# Local, per-developer Claude Code settings (the shared config is .claude/settings.json)
+.claude/settings.local.json
+
+# Test-list lock marker: created and removed by the human, never committed
+.tests-locked
