@@ -64,22 +64,87 @@ block() {
 }
 
 # --- path containment ------------------------------------------------------
-# A token is "outside" when it is absolute, or traverses out of the repo root.
-outside_repo() {
+# Windows-style paths reach the hook as C:/... ; normalise them so a prefix
+# comparison against a POSIX root means something.
+to_posix() {
+  p=$1
+  case "$p" in
+    [A-Za-z]:[/\\]*)
+      if command -v cygpath >/dev/null 2>&1; then
+        cygpath -u "$p" 2>/dev/null || printf '%s' "$p"
+      else
+        drive=$(printf '%s' "$p" | cut -c1 | tr 'A-Z' 'a-z')
+        rest=$(printf '%s' "$p" | cut -c3- | tr '\\' '/')
+        printf '/%s%s' "$drive" "$rest"
+      fi
+      ;;
+    *) printf '%s' "$p" ;;
+  esac
+}
+
+# Absolute, normalised, POSIX. Empty for a token that is not a path at all.
+norm_abs() {
   p=$1
   case "$p" in
     -*) return 1 ;;
   esac
   case "$p" in
-    /*|[A-Za-z]:[/\\]*) abs=$p ;;
+    /*|[A-Za-z]:[/\\]*) abs=$(to_posix "$p") ;;
     *..*)               abs=$PWD/$p ;;
     *)                  return 1 ;;
   esac
-  abs=$(realpath -m "$abs" 2>/dev/null || printf '%s' "$abs")
-  case "$abs" in
-    "$REPO_ROOT"|"$REPO_ROOT"/*) return 1 ;;
-    *) return 0 ;;
+  realpath -m "$abs" 2>/dev/null || printf '%s' "$abs"
+  return 0
+}
+
+under() {
+  case "$1" in
+    "$2"|"$2"/*) return 0 ;;
+    *) return 1 ;;
   esac
+}
+
+# Deletes and moves are held to the repository root: destroying something
+# outside the project is never this agent's call to make.
+outside_repo() {
+  abs=$(norm_abs "$1") || return 1
+  under "$abs" "$REPO_ROOT" && return 1
+  return 0
+}
+
+# Writes are held to an allow-list instead. The repository is where the work
+# lives; the OS temp tree is where the harness tells the agent to put scratch
+# files, and refusing that would break ordinary work while protecting nothing —
+# the targets worth refusing (shell profiles, SSH keys, the agent's own global
+# configuration) sit under $HOME, outside every allowed root.
+WRITE_ROOTS=$REPO_ROOT
+for candidate in "${TMPDIR:-}" "${TEMP:-}" "${TMP:-}" /tmp; do
+  [ -n "$candidate" ] || continue
+  croot=$(to_posix "$candidate")
+  croot=$(realpath -m "$croot" 2>/dev/null || printf '%s' "$croot")
+  case "$WRITE_ROOTS" in
+    *"$croot"*) ;;
+    *) WRITE_ROOTS="$WRITE_ROOTS
+$croot" ;;
+  esac
+done
+
+write_denied() {
+  abs=$(norm_abs "$1") || return 1
+  oldifs=$IFS
+  IFS='
+'
+  for root in $WRITE_ROOTS; do
+    IFS=$oldifs
+    [ -n "$root" ] || continue
+    if under "$abs" "$root"; then
+      return 1
+    fi
+    IFS='
+'
+  done
+  IFS=$oldifs
+  return 0
 }
 
 check_paths_outside() {
@@ -122,8 +187,9 @@ case "$TOOL" in
     if [ -n "$PATHS" ]; then
       for p in $PATHS; do
         [ -z "$p" ] && continue
-        if outside_repo "$p"; then
-          block "$TOOL writes outside the repository root ($REPO_ROOT)" "$TOOL $p" "$p"
+        if write_denied "$p"; then
+          roots=$(printf '%s' "$WRITE_ROOTS" | tr '\n' ' ')
+          block "$TOOL writes outside every writable root ($roots)" "$TOOL $p" "$p"
         fi
       done
     fi
