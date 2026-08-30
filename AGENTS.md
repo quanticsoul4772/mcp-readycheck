@@ -10,7 +10,7 @@ own deployed URL and renders the result by category. The app is its own test cas
 | dev | `npm run dev` — serves `/mcp` on :3000, Inspector at `/mcp/inspector`. Backgrounded, it detaches; stop it by killing the node process, not just the shell. |
 | build | `npm run build` → `.mcp-use/build/index.js` |
 | typecheck | `npm run typecheck` (regenerates `mcp-env.d.ts`, then `tsc`) |
-| test | no suite yet — the hook suites are `sh .claude/hooks/*.test.sh` |
+| test | `npm test` — `node --test` over `tests/**/*.test.ts`, no test framework dependency. The hook suites are separate: `sh .claude/hooks/*.test.sh` |
 | deploy | `npx -y mcp-use@latest deploy -y` (GitHub-connected). Never run it to "check something". |
 
 ## Stack facts
@@ -78,7 +78,22 @@ lint or a hook.
   share a status check between them.
 - **Unconstrained strings.** `category`, `severity`, and `scope` have no enum in
   the OpenAPI spec. Derive groupings from the response; never hardcode the six
-  category names into a schema.
+  category names into a schema. **Confirmed against a real audit:** the wire
+  values are slugs, and there were **four**, not six —
+  `connectivity`, `tool-metadata`, `client-compatibility`, `resource-metadata`;
+  severities `error`, `warning`, `info`; scopes `server`, `view`. Hardcoding the
+  documented prose names would have been wrong about both the spelling and the
+  count.
+- **Relative specifiers cannot satisfy both toolchains.** TypeScript NodeNext
+  wants `./x.js` and resolves it to `x.ts`; Node's type stripping, which runs
+  the tests, resolves it literally and finds nothing. Writing `./x.ts` inverts
+  the failure (TS5097). The fix is the `#lib/*` subpath imports map in
+  `package.json` — one specifier both resolve. Do not "fix" it back to a
+  relative path.
+- **Node's strip-only mode rejects TypeScript parameter properties.** Declare
+  class fields explicitly; `constructor(readonly x: T)` throws
+  `ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX` at import time, which typecheck does not
+  catch.
 - **`hint` and `details` are untyped** (`anyOf: [{}, null]`), not strings.
 - **`xargs -n1` defaults to `echo`,** which eats `-n`. Use `xargs -n1 printf '%s\n'`.
 - **GNU sed rejects a literal newline** passed through a shell variable in a

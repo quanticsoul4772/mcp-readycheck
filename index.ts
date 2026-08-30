@@ -1,6 +1,13 @@
 import { MCPServer } from "mcp-use";
 import { z } from "zod";
 
+import {
+  auditOutputSchema,
+  mapAuditResponse,
+  startAuditOutputSchema,
+} from "#lib/audit-schema";
+import { createAudit, fetchAudit, resolveActiveDeploymentId } from "#lib/manufact";
+
 const server = new MCPServer({
   name: "mcp-readycheck",
   title: "mcp-readycheck", // Human readable name of the server
@@ -112,6 +119,110 @@ export const sayHello = server.tool(
       structuredContent: data,
     };
   }
+);
+
+// READINESS TOOLS
+//
+// Split into start and get deliberately: no tool call waits on audit
+// completion, and each call is one bounded API round-trip. A single polling
+// tool would hold a request open for the whole audit and give the view nothing
+// to render until it finished (STAGE-PLAN correction 5).
+//
+// No view binding in G1. G2 adds `view: { name: "audit-report" }` together with
+// `views/audit-report/` — binding a view whose directory is not in the primed
+// registry throws at mount, which neither typecheck nor build would catch.
+
+const startAuditInputSchema = z.object({
+  serverId: z
+    .string()
+    .min(1)
+    .describe("Manufact server id to audit, e.g. a9f68f45-7160-4b30-8855-06399bd6aebb"),
+});
+
+const getAuditInputSchema = z.object({
+  serverId: z.string().min(1).describe("Manufact server id the audit belongs to"),
+  auditId: z.string().min(1).describe("Audit id returned by start_audit"),
+});
+
+/** Turns a thrown error into an MCP error result. Never leaks the API key. */
+function toolError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return {
+    isError: true as const,
+    content: [{ type: "text" as const, text: message }],
+  };
+}
+
+export async function startAuditHandler({ serverId }: { serverId: string }) {
+  try {
+    const deploymentId = await resolveActiveDeploymentId(serverId);
+    const created = await createAudit(serverId, deploymentId);
+    const data = startAuditOutputSchema.parse({
+      auditId: created.id,
+      status: created.status,
+    });
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(data) }],
+      structuredContent: data,
+    };
+  } catch (error) {
+    return toolError(error);
+  }
+}
+
+export async function getAuditHandler({
+  serverId,
+  auditId,
+}: {
+  serverId: string;
+  auditId: string;
+}) {
+  try {
+    const data = mapAuditResponse(await fetchAudit(serverId, auditId));
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(data) }],
+      structuredContent: data,
+    };
+  } catch (error) {
+    return toolError(error);
+  }
+}
+
+export const startAudit = server.tool(
+  {
+    name: "start_audit",
+    title: "Start readiness audit",
+    description:
+      "Start Manufact's publishing checks against a server's active deployment. " +
+      "Returns an auditId immediately; read the result with get_audit.",
+    inputSchema: startAuditInputSchema,
+    outputSchema: startAuditOutputSchema,
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      openWorldHint: true,
+    },
+  },
+  async (input) => startAuditHandler(input),
+);
+
+export const getAudit = server.tool(
+  {
+    name: "get_audit",
+    title: "Read readiness audit",
+    description:
+      "Read one readiness audit's current state and its checks, grouped by whatever " +
+      "categories the API returns.",
+    inputSchema: getAuditInputSchema,
+    outputSchema: auditOutputSchema,
+    visibility: "app",
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      openWorldHint: true,
+    },
+  },
+  async (input) => getAuditHandler(input),
 );
 
 export default server;

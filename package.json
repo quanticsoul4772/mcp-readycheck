@@ -1,6 +1,10 @@
 {
   "name": "mcp-readycheck",
   "type": "module",
+  "//imports": "Subpath imports so one specifier satisfies both toolchains: TypeScript NodeNext resolves #lib/* to the .ts source, and Node's type stripping loads that same .ts directly. A relative specifier cannot do both — .js resolves literally under Node and finds nothing, .ts needs allowImportingTsExtensions.",
+  "imports": {
+    "#lib/*": "./lib/*.ts"
+  },
   "engines": {
     "node": ">=22.22.2"
   },
@@ -23,7 +27,8 @@
     "dev": "mcp-use dev",
     "start": "mcp-use start",
     "deploy": "mcp-use deploy",
-    "typecheck": "mcp-use typecheck"
+    "typecheck": "mcp-use typecheck",
+    "test": "node --test \"tests/**/*.test.ts\""
   },
   "dependencies": {
     "mcp-use": "2.3.3",
