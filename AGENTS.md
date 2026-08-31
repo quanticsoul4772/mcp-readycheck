@@ -171,9 +171,11 @@ lint or a hook.
   not minutes: waiting would have cost almost nothing.
   `.github/workflows/verdict.yml` fails a PR whose body carries no approving
   verdict naming the head commit, with `[plan]`/`[docs]` titles exempt only
-  when the diff is documentation-only. **It is not yet in ruleset `21871580`'s
-  required checks** — until it is, a red `verdict` is advisory, and that gap is
-  itself the "absent guard read as an allowance" failure described above.
+  when the diff is documentation-only. **It is now in ruleset `21871580`'s
+  required checks**, alongside `fast-checks` — confirmed against the API on
+  2026-08-31. Bypass is `RepositoryRole` 5 (admin), `bypass_mode: always`; that
+  entry exists because setting `bypass_actors: []` once left the repo owner with
+  no override at all and froze the repository behind a stalled evaluator.
 - **A gate that can be satisfied by its own subject is not a gate.** The first
   draft of `verdict.yml` could be passed three ways without an evaluator ever
   seeing the merged code: a verdict bound to no commit (approve a one-liner,
@@ -312,8 +314,35 @@ lint or a hook.
   proves this guard works. The lock covers the *approved product list*, so:
   `.claude/hooks/**` is excluded outright (integrity.sh governs it, and refuses
   every tool call while it drifts, which is stricter), and a test file absent
-  from HEAD and from the index is a proposal, not a locked test. Everything the
-  guard cannot resolve to a repo-relative path stays refused.
+  from HEAD and from the index is a proposal, not a locked test.
+- **Decide on a canonical path, or the exception becomes the bypass.** The first
+  draft of those two exceptions tested the raw string, and an evaluation
+  defeated it three ways by executing it: `tests/Readiness-Tool.test.ts` (git is
+  case-sensitive, NTFS is not, so an exact-case lookup called a locked file a
+  brand-new proposal — `fs.statSync` proved both spellings were the same 14625
+  bytes), `.claude/hooks/../../tests/readiness-tool.test.ts` (a substring test
+  is not a prefix test, and it short-circuited before the `..` check), and
+  `notes.claude/hooks/x/../../../tests/…` (the same substring inside another
+  name). Resolve `.` and `..`, normalise separators, reduce to repo-relative,
+  compare case-insensitively against `ls-files` ∪ `ls-tree HEAD` — then decide.
+  Anything that will not resolve and still looks like a test is refused.
+- **Two spellings of one root, and one backslash written as two.** `/d/Projects/x`
+  and `D:/Projects/x` are the same directory; comparing them as strings makes
+  every path look external, and the fail-closed branch then refuses the hook's
+  own test suite. Separately, `node -e '…'` inside single quotes passes the JS
+  source through verbatim, so `.replace(/\\\\/g, "/")` compiles to a regex
+  matching *two* backslashes and silently leaves a Windows path unconverted.
+  Write `/\\/g`. Both bugs presented identically — "cannot resolve" on a path
+  that was obviously inside the repo.
+- **The runner allow-list has two gaps, and they are gaps, not oversights.**
+  `X=vitest; $X -u` and `echo -u | xargs npx vitest` are not recognised: both
+  need dataflow, not pattern matching. Everything reachable by pattern is
+  covered — the basename of any token (`./node_modules/.bin/jest`), the
+  argument of a `-c` (`sh -c "vitest -u"`), `npm run test:unit`, `deno test`,
+  `--update-snapshot=true`. Expanding *every* token on whitespace would close
+  the first gap and refuse `git commit -m "ran vitest -u earlier"`, which is the
+  false-positive class this repo has already paid for twice. The lock exists to
+  make an edit visible, not impossible.
 - **Git Bash rewrites a POSIX path passed as argv to a native binary.**
   `node -e '…' /elsewhere/x.test.ts` arrives as
   `C:/Program Files/Git/elsewhere/x.test.ts`. That is how a real defect surfaced:
