@@ -184,6 +184,21 @@ lint or a hook.
   rests on a human clicking merge, which is the attention that failed on PR #8.
   Treat the check as evidence that a verdict exists, never as evidence that it
   is honest.
+- **The verdict block needs a field the evaluator does not emit on its own.**
+  `verdict.yml` requires `{"verdict": …, "evaluated_commit": "<head sha>"}` in
+  one object, but `.claude/agents/evaluator.md` specifies only
+  `{verdict, findings, criteria_unmet}` — and `.claude/` is frozen, so the
+  agent definition cannot be changed here. Two consequences. Ask the evaluator
+  for `evaluated_commit` explicitly in the launch prompt, naming the commit it
+  is judging. And know that pasting the verdict into the PR body is a human or
+  agent step, which is what keeps the author-written-body weakness on the
+  mandatory path rather than at the margin. Fixing the agent definition is the
+  real close; it needs a goal that is allowed to touch `.claude/`.
+- **A rename reports only its destination.** `pulls.listFiles` gives the new
+  path in `filename` and the old one in `previous_filename`. A predicate that
+  reads only `filename` classifies `git mv .github/workflows/verdict.yml
+  docs/verdict.yml.md` as documentation — deleting the gate under its own
+  exemption. Check where a file came from as well as where it landed.
 - **Two independent substring tests over one blob are not one conjoined test.**
   The verdict check tested "body contains an approving verdict" and "body
   mentions the head SHA" separately. An evaluation defeated it by executing it:

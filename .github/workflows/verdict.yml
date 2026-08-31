@@ -84,10 +84,20 @@ jobs:
                 return;
               }
 
+              // A rename reports only its DESTINATION in `filename`, so
+              // `git mv .github/workflows/verdict.yml docs/verdict.yml.md`
+              // under a [docs] title would read as documentation and delete
+              // this gate under its own exemption. Where the file came from
+              // counts as much as where it landed.
+              const docPath = (p) =>
+                typeof p === 'string' &&
+                ((p.startsWith('docs/') && p.endsWith('.md')) || p === 'README.md');
               const isDoc = (f) =>
-                (f.filename.startsWith('docs/') && f.filename.endsWith('.md')) ||
-                f.filename === 'README.md';
-              const other = files.filter((f) => !isDoc(f)).map((f) => f.filename);
+                docPath(f.filename) &&
+                (f.previous_filename === undefined || docPath(f.previous_filename));
+              const other = files
+                .filter((f) => !isDoc(f))
+                .map((f) => (f.previous_filename ? `${f.previous_filename} -> ${f.filename}` : f.filename));
 
               if (other.length === 0) {
                 core.info(`Exempt: ${files.length} file(s), all documentation.`);
@@ -111,11 +121,24 @@ jobs:
 
             const verdicts = [];
             for (const text of candidates) {
+              const trimmed = text.trim();
               let parsed;
               try {
-                parsed = JSON.parse(text.trim());
+                parsed = JSON.parse(trimmed);
               } catch {
-                continue; // prose, or a non-JSON fenced block
+                // A block that mentions a verdict but will not parse is not
+                // prose to skip over. Skipping it is how a BLOCK with one
+                // trailing comma disappears while a reader still sees the word
+                // in the body — so an unparseable verdict-shaped block fails.
+                if (/"verdict"/.test(trimmed) && trimmed !== body.trim()) {
+                  core.setFailed(
+                    'A block in the PR body mentions "verdict" but is not valid JSON, ' +
+                      'so it cannot be read. Fix the JSON rather than leaving it ambiguous:\n' +
+                      trimmed.slice(0, 400),
+                  );
+                  return;
+                }
+                continue; // ordinary prose
               }
               if (parsed && typeof parsed === 'object' && typeof parsed.verdict === 'string') {
                 verdicts.push(parsed);
