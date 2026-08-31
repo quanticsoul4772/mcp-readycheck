@@ -164,6 +164,21 @@ expect 0 "quoted pipeline under sh -c"       Bash command "sh -c \"npm test | so
 # runner's flag.
 expect 0 "curl against a vitest repo"        Bash command "curl -u tok https://github.com/vitest-dev/vitest"
 expect 0 "docker run -u before the runner"   Bash command "docker run -u 1000 node npm test"
+# Round 3 found these by generalising past the strings round 2 reported. A
+# scheme anywhere in a token is not a URL; `-lc` and `-euc` are `-c`; and the
+# marker check is a verb list, so every verb that unlinks has to be in it.
+expect 2 "scheme-prefixed runner path"       Bash command "node file:///d/x/vitest -u"
+expect 0 "an actual https URL"               Bash command "curl -u tok https://github.com/vitest-dev/vitest"
+expect 2 "bash -lc"                          Bash command "bash -lc \"vitest -u\""
+expect 2 "sh -euc"                           Bash command "sh -euc \"vitest -u\""
+expect 2 "shred the marker"                  Bash command "shred -u .tests-locked"
+expect 2 "find the marker and unlink it"     Bash command "find . -name .tests-locked -delete"
+# Class coverage for the two fixes above, not just their reported spellings.
+expect 2 "directory case variant"            Write file_path "TeStS/Self-Audit-Green.Test.TS"
+expect 2 "absolute upper-case marker"        Bash command "rm $REPO_ROOT/.TESTS-LOCKED"
+expect 2 "two continuations"                 Bash command "npx vitest \\
+  --run \\
+  -u"
 expect 2 "path escaping the repo"            Edit file_path "../outside/other.test.ts"
 
 printf '\n=== LOCKED: non-test work still flows ===\n'
