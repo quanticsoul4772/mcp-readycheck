@@ -122,6 +122,33 @@ stages that follow.
     resolves it literally. The `#lib/*` subpath imports map in `package.json`
     is what both resolve. Node's strip-only mode also rejects TypeScript
     parameter properties, which `typecheck` does not catch.
+16. **A view needs no `connectDomains` entry for the API, and adding one would
+    be wrong.** `connectDomains` maps to CSP `connect-src` — origins for fetch,
+    XHR and WebSocket. A view calls a tool through the host bridge; the *server*
+    contacts `cloud.manufact.com`. The framework already appends the server
+    origin to `connectDomains` and the assets origin to `resourceDomains` at
+    emission, so a view that makes no network request of its own declares no
+    `csp` block at all and keeps the secure default of no connections. Naming
+    the API origin would grant reach the view neither needs nor uses.
+17. **`useToolContext` latches; it cannot be polled.** The first structured
+    success or tool error becomes terminal for the view's lifetime and later
+    notifications cannot overwrite it. A view that refreshes must call the tool
+    itself via `useCallTool`, reading its ids off the latched
+    `toolInput`/`toolOutput`. `useCallTool` also requires the tool be exported
+    from the server entry — the type resolves to an error string otherwise.
+18. **A verdict is now a required check, and it binds to a commit.** Ruleset
+    `21871580` requires `verdict` alongside `fast-checks`, `bypass_actors: []`.
+    A PR merges only with a fenced JSON object in its body carrying both
+    `"verdict"` and an `"evaluated_commit"` naming the head SHA, so an approval
+    given for one commit does not cover what is pushed after it. `[plan]` and
+    `[docs]` titles are exempt only when every changed file is Markdown under
+    `docs/` or the root README — a plan PR carrying tests is not exempt.
+19. **Verify a gate by executing it, not by reading it.** Six distinct bypasses
+    of `verdict.yml` were found across four evaluations, every one by extracting
+    the `script:` body into a runnable function and running it against
+    constructed cases. Reading passed all six. Two of the six were introduced by
+    *tightening* the gate, and both were the same shape: a branch that
+    terminates where it should continue.
 
 ## Invariants
 
