@@ -184,6 +184,16 @@ lint or a hook.
   rests on a human clicking merge, which is the attention that failed on PR #8.
   Treat the check as evidence that a verdict exists, never as evidence that it
   is honest.
+- **Two independent substring tests over one blob are not one conjoined test.**
+  The verdict check tested "body contains an approving verdict" and "body
+  mentions the head SHA" separately. An evaluation defeated it by executing it:
+  a round-1 `APPROVE` for the old commit plus a round-2 `BLOCK` naming the new
+  one passes, because each test matches a different block. That is not
+  adversarial input — it is exactly what a BLOCK-then-fix cycle leaves in a PR
+  body, so the gate would have gone green on a live BLOCK the first time it was
+  used. Both facts must be read from the *same* parsed object, and a
+  non-approving verdict for the head commit must be decisive whatever else the
+  body still carries.
 - **A workflow triggered by `issue_comment` cannot gate a PR.** Such a run
   executes with `GITHUB_SHA` set to the default branch, so its check attaches to
   `main` and never appears in the PR's checks list. A verdict posted as a
