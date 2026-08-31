@@ -306,9 +306,8 @@ expect 0 "edit production source"            Edit file_path "index.ts"
 expect 0 "run the suite without -u"          Bash command "npx vitest run"
 expect 0 "ordinary build"                    Bash command "npm run build"
 
-# The fake goes; the trap above puts the real one back on every exit path,
-# including the ones that never reach this line.
-command rm -f "$MARKER"
+# Nothing to tear down: the marker was never touched, and the temp directory
+# goes with the trap.
 
 printf '\n=== SUMMARY: %s passed, %s failed ===\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
