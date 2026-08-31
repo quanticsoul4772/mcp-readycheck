@@ -1,0 +1,530 @@
+{
+  "auditId": "5309c70b-1e27-4e69-83e9-b5d70b95769d",
+  "status": "completed",
+  "isReadyForChatgpt": false,
+  "isReadyForClaudeai": true,
+  "targetUrl": "https://mcp-readycheck.run.mcp-use.com/mcp",
+  "errorMessage": null,
+  "checks": [
+    {
+      "id": "0c3ff35a-e2d6-4a12-ab88-edf8cb4ea0aa",
+      "checkId": "server-responds",
+      "checkName": "Server responds to initialize",
+      "status": "pass",
+      "severity": "error",
+      "category": "connectivity",
+      "scope": "server",
+      "platforms": [],
+      "message": "Handshake succeeded in 654ms",
+      "details": null,
+      "hint": null,
+      "durationMs": 654
+    },
+    {
+      "id": "0ea0fd6d-3e4b-4dda-aed3-1e6ca3d85fee",
+      "checkId": "tool-hints-present",
+      "checkName": "All tools have OpenAI behavior hints",
+      "status": "fail",
+      "severity": "error",
+      "category": "tool-metadata",
+      "scope": "server",
+      "platforms": [
+        "chatgpt"
+      ],
+      "message": "1 behavior annotation issue(s) found",
+      "details": [
+        {
+          "label": "get_audit.annotations.openWorldHint",
+          "value": "cannot be true when readOnlyHint is true because reads do not change external state"
+        }
+      ],
+      "hint": {
+        "text": "On each tool, declare all three booleans accurately. readOnlyHint is true only when no state changes; openWorldHint is true for writes that change publicly visible internet state or send/submit to third parties, and false for closed/private workflows; destructiveHint is true for irreversible side effects, including messages and transactions that cannot be undone."
+      },
+      "durationMs": 0
+    },
+    {
+      "id": "cfd755e3-bb46-4f56-9403-3f3985680445",
+      "checkId": "tools-list-responds",
+      "checkName": "Tools list returns results",
+      "status": "pass",
+      "severity": "warning",
+      "category": "connectivity",
+      "scope": "server",
+      "platforms": [],
+      "message": "2 tool(s) returned",
+      "details": null,
+      "hint": null,
+      "durationMs": 178
+    },
+    {
+      "id": "259a658a-c8a6-4a3a-b524-693e723dee63",
+      "checkId": "tool-description-present",
+      "checkName": "All tools have descriptions",
+      "status": "pass",
+      "severity": "warning",
+      "category": "tool-metadata",
+      "scope": "server",
+      "platforms": [],
+      "message": "All tools have non-empty descriptions",
+      "details": [],
+      "hint": null,
+      "durationMs": 0
+    },
+    {
+      "id": "d7de1e84-53ba-422e-abcf-9e195de41c45",
+      "checkId": "resources-list-responds",
+      "checkName": "Resources list responds",
+      "status": "pass",
+      "severity": "info",
+      "category": "connectivity",
+      "scope": "server",
+      "platforms": [],
+      "message": "1 resource(s) returned",
+      "details": null,
+      "hint": null,
+      "durationMs": 136
+    },
+    {
+      "id": "947dbead-a489-410c-94b3-f4c34ec0e4d8",
+      "checkId": "claude-tool-hints-present",
+      "checkName": "Claude tools declare applicable behavior hints",
+      "status": "pass",
+      "severity": "error",
+      "category": "client-compatibility",
+      "scope": "server",
+      "platforms": [
+        "claudeai"
+      ],
+      "message": "All tools include an applicable readOnlyHint or destructiveHint",
+      "details": [],
+      "hint": null,
+      "durationMs": 0
+    },
+    {
+      "id": "0db8f270-1a8a-4fad-bfae-43de4d90313a",
+      "checkId": "tool-params-description-present",
+      "checkName": "All tool parameters have descriptions",
+      "status": "pass",
+      "severity": "warning",
+      "category": "tool-metadata",
+      "scope": "server",
+      "platforms": [],
+      "message": "All tool parameters have descriptions",
+      "details": [],
+      "hint": null,
+      "durationMs": 0
+    },
+    {
+      "id": "2ba2e23c-d42e-4ef1-a852-3ec0eb3994c6",
+      "checkId": "tool-title-present",
+      "checkName": "All tools have a display title",
+      "status": "pass",
+      "severity": "error",
+      "category": "client-compatibility",
+      "scope": "server",
+      "platforms": [
+        "claudeai"
+      ],
+      "message": "All tools have a display title",
+      "details": [],
+      "hint": null,
+      "durationMs": 0
+    },
+    {
+      "id": "bf12ed2b-8d28-4d3b-9563-ea8a94691642",
+      "checkId": "tool-input-header-annotations-valid",
+      "checkName": "Tool input header annotations are valid",
+      "status": "pass",
+      "severity": "error",
+      "category": "tool-metadata",
+      "scope": "server",
+      "platforms": [],
+      "message": "All x-mcp-header annotations satisfy Streamable HTTP requirements",
+      "details": [],
+      "hint": {
+        "text": "Use a unique HTTP field-name token on a string, integer, or boolean property reached only through inputSchema.properties. Do not place x-mcp-header under arrays, composition keywords, conditionals, or references."
+      },
+      "durationMs": 0
+    },
+    {
+      "id": "b3fa2959-bce6-4ef6-96fd-2e0cea51fd21",
+      "checkId": "tool-names-protocol-unique",
+      "checkName": "Tool names follow MCP uniqueness guidance",
+      "status": "pass",
+      "severity": "warning",
+      "category": "tool-metadata",
+      "scope": "server",
+      "platforms": [],
+      "message": "All tool names are unique",
+      "details": [],
+      "hint": {
+        "text": "MCP recommends unique tool names within a server. Rename duplicates to avoid ambiguous host behavior."
+      },
+      "durationMs": 0
+    },
+    {
+      "id": "4fa98719-8817-4f5c-b9ab-fc25d98fbaf4",
+      "checkId": "openai-file-params-schema-valid",
+      "checkName": "OpenAI file parameters use valid schemas",
+      "status": "pass",
+      "severity": "error",
+      "category": "client-compatibility",
+      "scope": "server",
+      "platforms": [
+        "chatgpt"
+      ],
+      "message": "All declared OpenAI file parameters use reviewer-valid schemas",
+      "details": [],
+      "hint": null,
+      "durationMs": 0
+    },
+    {
+      "id": "67888c3d-cdfa-4dd6-977d-98d954c9424a",
+      "checkId": "tool-name-protocol-length",
+      "checkName": "Tool names follow the MCP 1–128 character range",
+      "status": "pass",
+      "severity": "warning",
+      "category": "tool-metadata",
+      "scope": "server",
+      "platforms": [],
+      "message": "All tool names follow the MCP recommended length",
+      "details": [],
+      "hint": {
+        "text": "MCP recommends tool names between 1 and 128 characters. Individual hosts can impose stricter limits; Claude's 64-character requirement is checked separately."
+      },
+      "durationMs": 0
+    },
+    {
+      "id": "8ffec695-c2c0-4894-bdf6-66ea3ff1b378",
+      "checkId": "server-tools-capability-declared",
+      "checkName": "Server declares tools capability",
+      "status": "pass",
+      "severity": "error",
+      "category": "connectivity",
+      "scope": "server",
+      "platforms": [],
+      "message": "Server declares tools capability in initialize response",
+      "details": null,
+      "hint": null,
+      "durationMs": 0
+    },
+    {
+      "id": "96aba740-420b-4fbb-ba6f-544b5d3bf9bf",
+      "checkId": "tool-input-schema-type",
+      "checkName": "Tool input schemas have a valid object structure",
+      "status": "pass",
+      "severity": "error",
+      "category": "tool-metadata",
+      "scope": "server",
+      "platforms": [],
+      "message": "All tool input schemas have a valid object structure",
+      "details": [],
+      "hint": {
+        "text": "Every tool's inputSchema must be a non-null JSON Schema object with type: \"object\""
+      },
+      "durationMs": 0
+    },
+    {
+      "id": "5ebe2cee-33ba-4199-a623-d90266298f3a",
+      "checkId": "tool-names-unique",
+      "checkName": "ChatGPT tool names are unique",
+      "status": "pass",
+      "severity": "error",
+      "category": "client-compatibility",
+      "scope": "server",
+      "platforms": [
+        "chatgpt"
+      ],
+      "message": "All tool names are unique",
+      "details": [],
+      "hint": {
+        "text": "OpenAI requires unique tool names within each MCP server. Rename duplicates before ChatGPT or Codex submission."
+      },
+      "durationMs": 0
+    },
+    {
+      "id": "ed2cd034-45fa-4499-9562-44035b65aa13",
+      "checkId": "cursor-tool-name-budget",
+      "checkName": "Tool names leave room for Cursor's server alias",
+      "status": "pass",
+      "severity": "warning",
+      "category": "client-compatibility",
+      "scope": "server",
+      "platforms": [
+        "cursor"
+      ],
+      "message": "No tool name independently exhausts Cursor's observed 60-character combined budget",
+      "details": [],
+      "hint": {
+        "text": "Shorten the tool name. Cursor has described a 60-character combined server-alias and tool-name budget, but this is secondary support evidence rather than a published MCP rule; shorter names can also fail when paired with a long local alias."
+      },
+      "durationMs": 0
+    },
+    {
+      "id": "ac640bd9-c0de-489c-a28a-12b326605ed7",
+      "checkId": "tool-name-length",
+      "checkName": "Claude tool names are within 64 characters",
+      "status": "pass",
+      "severity": "error",
+      "category": "client-compatibility",
+      "scope": "server",
+      "platforms": [
+        "claudeai"
+      ],
+      "message": "All tool names are within Claude's 64-character limit",
+      "details": [],
+      "hint": {
+        "text": "Claude.ai enforces a hard 64-character limit on tool names. Shorten the names listed above."
+      },
+      "durationMs": 0
+    },
+    {
+      "id": "3429eb4b-df5c-4446-8160-cbe7a97457d4",
+      "checkId": "tool-name-format",
+      "checkName": "Tool names use valid characters",
+      "status": "pass",
+      "severity": "warning",
+      "category": "tool-metadata",
+      "scope": "server",
+      "platforms": [],
+      "message": "All tool names use valid characters",
+      "details": [],
+      "hint": {
+        "text": "Tool names should only contain letters, digits, underscore (_), hyphen (-), and dot (.) per the MCP specification"
+      },
+      "durationMs": 0
+    },
+    {
+      "id": "18464d72-832c-4bcf-abe1-bac12b9f53a9",
+      "checkId": "fuzz-edge-case-handling",
+      "checkName": "Tool errors are human-readable",
+      "status": "pass",
+      "severity": "warning",
+      "category": "tool-metadata",
+      "scope": "server",
+      "platforms": [],
+      "message": "Edge-case inputs return clean error messages for 1 explicitly safe tool(s)",
+      "details": [],
+      "hint": null,
+      "durationMs": 499
+    },
+    {
+      "id": "14482858-df54-488f-b4a2-127793518fda",
+      "checkId": "tool-description-no-prompt-injection",
+      "checkName": "Tool descriptions have no prompt-injection patterns",
+      "status": "pass",
+      "severity": "warning",
+      "category": "client-compatibility",
+      "scope": "server",
+      "platforms": [
+        "claudeai"
+      ],
+      "message": "No prompt-injection patterns found in tool descriptions",
+      "details": [],
+      "hint": {
+        "text": "This deterministic heuristic found instruction-like language. Review it manually and describe what the tool does without telling the model how to behave; a text match alone is not proof of policy rejection."
+      },
+      "durationMs": 0
+    },
+    {
+      "id": "98b47363-d812-4389-aa5f-e5c8b8eb0766",
+      "checkId": "tool-output-schema-valid",
+      "checkName": "Declared output schemas have a valid basic structure",
+      "status": "pass",
+      "severity": "error",
+      "category": "tool-metadata",
+      "scope": "server",
+      "platforms": [],
+      "message": "2 declared output schema(s) pass basic structural validation; schemas may describe any JSON value, including arrays",
+      "details": [],
+      "hint": null,
+      "durationMs": 0
+    },
+    {
+      "id": "d38979b4-78e2-49d6-84e2-bb367434d265",
+      "checkId": "mixed-read-write",
+      "checkName": "Mixed Read/Write Tools",
+      "status": "pass",
+      "severity": "warning",
+      "category": "tool-metadata",
+      "scope": "server",
+      "platforms": [],
+      "message": "All 2 tools have separate read and write operations",
+      "details": [],
+      "hint": null,
+      "durationMs": 0
+    },
+    {
+      "id": "738b3820-dcad-4022-85a9-8a2e3b9e262b",
+      "checkId": "view-resource-coverage",
+      "checkName": "All discovered view resources were inspected",
+      "status": "pass",
+      "severity": "warning",
+      "category": "resource-metadata",
+      "scope": "view",
+      "platforms": [
+        "chatgpt",
+        "claudeai"
+      ],
+      "message": "Inspected all 1 discovered view resource(s)",
+      "details": null,
+      "hint": null,
+      "durationMs": 0
+    },
+    {
+      "id": "487ef49d-1108-4033-a663-11df3f5b4888",
+      "checkId": "prompt-injection",
+      "checkName": "Prompt Injection Detection",
+      "status": "pass",
+      "severity": "warning",
+      "category": "tool-metadata",
+      "scope": "server",
+      "platforms": [],
+      "message": "All 2 tools passed injection check",
+      "details": [],
+      "hint": null,
+      "durationMs": 0
+    },
+    {
+      "id": "bb8d8ba3-e52a-4b62-ab2d-63cf23e0995e",
+      "checkId": "resource-content-valid",
+      "checkName": "View resource content is valid",
+      "status": "pass",
+      "severity": "error",
+      "category": "resource-metadata",
+      "scope": "view",
+      "platforms": [
+        "chatgpt",
+        "claudeai"
+      ],
+      "message": "All view resources use ui://, a supported MCP Apps HTML MIME type, and valid content",
+      "details": [],
+      "hint": null,
+      "durationMs": 0
+    },
+    {
+      "id": "e4e43bff-f7d0-48ec-99cd-3cdf80d316fb",
+      "checkId": "tool-invocation-metadata-present",
+      "checkName": "Tool invocation metadata present",
+      "status": "pass",
+      "severity": "warning",
+      "category": "tool-metadata",
+      "scope": "view",
+      "platforms": [
+        "chatgpt"
+      ],
+      "message": "All view-linked tools have invoking/invoked metadata",
+      "details": [],
+      "hint": null,
+      "durationMs": 0
+    },
+    {
+      "id": "b3d73493-6589-4204-a4cc-f1dbd3434e1e",
+      "checkId": "tool-resource-uri-readable",
+      "checkName": "Tool-linked resource URI is readable",
+      "status": "pass",
+      "severity": "error",
+      "category": "tool-metadata",
+      "scope": "view",
+      "platforms": [
+        "chatgpt",
+        "claudeai"
+      ],
+      "message": "All tool-linked resource URIs are readable",
+      "details": [],
+      "hint": null,
+      "durationMs": 0
+    },
+    {
+      "id": "ab3d155d-2d27-45eb-b7c7-30d17ede31f7",
+      "checkId": "tool-resource-metadata-complete",
+      "checkName": "View resource metadata complete",
+      "status": "fail",
+      "severity": "warning",
+      "category": "resource-metadata",
+      "scope": "view",
+      "platforms": [
+        "chatgpt",
+        "claudeai"
+      ],
+      "message": "1 resource(s) have incomplete metadata",
+      "details": [
+        {
+          "label": "uri",
+          "value": "ui://views/audit-report.html"
+        }
+      ],
+      "hint": {
+        "text": "Use a ui:// URI and text/html;profile=mcp-app. For mcp-use servers, set the widget description in widgetMetadata; other stacks can use _meta.ui.widgetDescription or the OpenAI compatibility alias."
+      },
+      "durationMs": 0
+    },
+    {
+      "id": "b012dff4-32d9-447c-a3e3-38a963bd906d",
+      "checkId": "view-domain-present",
+      "checkName": "View resources declare a domain",
+      "status": "pass",
+      "severity": "error",
+      "category": "resource-metadata",
+      "scope": "view",
+      "platforms": [
+        "chatgpt"
+      ],
+      "message": "All view resources declare one shared HTTPS origin",
+      "details": [],
+      "hint": null,
+      "durationMs": 0
+    },
+    {
+      "id": "27c40f3f-81c4-477d-bf59-ddf5fc819b47",
+      "checkId": "tool-visibility-valid",
+      "checkName": "Tool visibility metadata is valid",
+      "status": "pass",
+      "severity": "error",
+      "category": "tool-metadata",
+      "scope": "view",
+      "platforms": [
+        "chatgpt",
+        "claudeai"
+      ],
+      "message": "All explicit ui.visibility arrays are valid",
+      "details": [],
+      "hint": null,
+      "durationMs": 0
+    },
+    {
+      "id": "34c481a5-4e8c-412f-ab37-6f95d0c85650",
+      "checkId": "view-csp-origin-coverage",
+      "checkName": "CSP metadata covers literal external origins",
+      "status": "pass",
+      "severity": "warning",
+      "category": "resource-metadata",
+      "scope": "view",
+      "platforms": [
+        "chatgpt"
+      ],
+      "message": "All statically detectable external origins are declared in CSP metadata",
+      "details": [],
+      "hint": null,
+      "durationMs": 0
+    },
+    {
+      "id": "18c63c48-1f7d-448a-a2ef-45b24634b985",
+      "checkId": "view-domain-responds",
+      "checkName": "Declared domains respond",
+      "status": "pass",
+      "severity": "warning",
+      "category": "resource-metadata",
+      "scope": "view",
+      "platforms": [
+        "chatgpt",
+        "claudeai"
+      ],
+      "message": "All declared domains are reachable",
+      "details": [],
+      "hint": null,
+      "durationMs": 132
+    }
+  ]
+}
