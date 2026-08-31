@@ -70,10 +70,14 @@ is_test_path() {
   # became unopenable, and so did every other hook suite. They have their own
   # guard: integrity.sh refuses any tool call while .claude/hooks differs from
   # HEAD, which is a stronger constraint than this one, not a weaker one.
-  case "$1" in
-    *.claude/hooks/*|.claude/hooks/*) return 1 ;;
+  # Paths arrive in whichever separator the caller used. On Windows the harness
+  # sends backslashes, so a forward-slash pattern silently matched nothing —
+  # which is how this exclusion failed the first time it was tried.
+  tp=$(printf '%s' "$1" | tr '\134' '/')
+  case "$tp" in
+    *.claude/hooks/*) return 1 ;;
   esac
-  case "$1" in
+  case "$tp" in
     *.test.*|*.spec.*|*/__tests__/*|*/__snapshots__/*|*.snap) return 0 ;;
     *) return 1 ;;
   esac
