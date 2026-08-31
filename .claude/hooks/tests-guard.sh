@@ -247,7 +247,7 @@ PATH_PAIRS_EOF
       # ends in a basename that reads like one. Anchored on a LEADING scheme —
       # matching `://` anywhere let `node file:///d/x/vitest -u` through, which
       # is a real runner invocation wearing a scheme.
-      case "$1" in
+      case "$(lower "$1")" in
         http://*|https://*|git://*|ssh://*|ftp://*|git+ssh://*) return 1 ;;
       esac
       base=${1##*/}
