@@ -107,6 +107,35 @@ expect 0 "hook suite, absolute + backslash"  Edit file_path "$REPO_ROOT\\.claude
 # that caught the guard splitting one path into two on the space.
 expect 2 "unresolvable absolute test path"   Edit file_path "/elsewhere/mystery.test.ts"
 expect 2 "spaced path ending in a test file" Edit file_path "/some dir/tests/x.test.ts"
+
+# Every case below was ALLOWED by the first draft of the proposal rule and
+# refused by the guard before it. An evaluation found them by executing the
+# guard; reading it found none of them. git is case-sensitive and this
+# filesystem is not, and a substring test on an unresolved path is not a
+# prefix test.
+printf '\n=== LOCKED: canonicalisation, not string matching ===\n'
+expect 2 "case variant of a tracked test"    Write file_path "tests/Readiness-Tool.test.ts"
+expect 2 "upper-case directory"              Write file_path "TESTS/readiness-tool.test.ts"
+expect 2 "traversal out of .claude/hooks"    Write file_path ".claude/hooks/../../tests/readiness-tool.test.ts"
+expect 2 "hooks substring inside a name"     Write file_path "notes.claude/hooks/x/../../../tests/readiness-tool.test.ts"
+expect 2 "dot-slash prefix"                  Edit file_path "./tests/readiness-tool.test.ts"
+expect 2 "windows separators"                Edit file_path "tests\\readiness-tool.test.ts"
+
+printf '\n=== LOCKED: the flag reaches the runner however it is written ===\n'
+expect 2 "pipe inside a quoted argument"     Bash command "npx vitest --testNamePattern='a|b' -u"
+expect 2 "&& inside a quoted argument"       Bash command "npx vitest -t \"a && b\" -u"
+expect 2 "quoted flag"                       Bash command "npx vitest \"-u\""
+expect 2 "path-prefixed runner"              Bash command "./node_modules/.bin/jest -u"
+expect 2 "runner under sh -c"                Bash command "sh -c \"vitest -u\""
+expect 2 "runner under bash -c"              Bash command "bash -c \"npx jest --update-snapshot\""
+expect 2 "npm run with a test script"        Bash command "npm run test:unit -- -u"
+expect 2 "deno test"                         Bash command "deno test -- -u"
+expect 2 "tap"                               Bash command "tap -u"
+expect 2 "flag with an = value"              Bash command "npx vitest --update-snapshot=true"
+# The boundary: expanding every token on whitespace would refuse this, and a
+# guard that refuses commit messages is the false-positive class this repo has
+# already paid for twice.
+expect 0 "runner named in a commit message"  Bash command "git commit -m \"ran vitest -u earlier\""
 expect 2 "path escaping the repo"            Edit file_path "../outside/other.test.ts"
 
 printf '\n=== LOCKED: non-test work still flows ===\n'
