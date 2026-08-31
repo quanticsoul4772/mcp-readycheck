@@ -88,13 +88,34 @@ case "$TOOL" in
     # Explicit printf: bare `xargs -n1` defaults to echo, which consumes -n.
     TOKENS=$(printf '%s\n' "$CMD" | xargs -n1 printf '%s\n' 2>/dev/null) || TOKENS=""
     [ -z "$TOKENS" ] && TOKENS=$(printf '%s\n' "$CMD" | tr ' \t' '\n\n')
-    for t in $TOKENS; do
-      case "$t" in
-        -u|--update-snapshot|--updateSnapshot|--update-snapshots|--ci=false|-U)
-          block "snapshot-update flag while tests are locked" "$CMD"
-          ;;
-      esac
-    done
+
+    # A snapshot-update flag only means anything to a test runner. Scoping the
+    # check to runner invocations is not a loosening: `-u` is also `git push -u`
+    # and `cygpath -u`, and both were refused here — neither can rewrite a test.
+    # A whole-command scan bought nothing and cost the session two commands.
+    #
+    # Segments split on `&&`, `;` and `|` so `npm test && git push -u` refuses
+    # nothing. The split is not quote-aware, and deliberately so: a mis-split
+    # can only lose a match, never invent one, and losing one here means a flag
+    # reaching a runner it was never attached to.
+    is_test_runner() {
+      printf '%s' "$1" | grep -qE '(^|[[:space:]])((npm|pnpm|yarn|bun)([[:space:]]+run)?[[:space:]]+test([[:space:]]|$)|npx[[:space:]]+(vitest|jest|playwright|mocha|ava|tap)([[:space:]]|$)|(vitest|jest|playwright|mocha|ava)([[:space:]]|$)|node([[:space:]]+[^[:space:]]+)*[[:space:]]+--test([[:space:]]|$|=))'
+    }
+
+    while IFS= read -r seg; do
+      [ -z "$seg" ] && continue
+      is_test_runner "$seg" || continue
+      SEG_TOKENS=$(printf '%s\n' "$seg" | tr ' \t' '\n\n')
+      for t in $SEG_TOKENS; do
+        case "$t" in
+          -u|--update-snapshot|--updateSnapshot|--update-snapshots|--ci=false|-U)
+            block "snapshot-update flag on a test runner while tests are locked" "$CMD"
+            ;;
+        esac
+      done
+    done <<SEGMENTS_EOF
+$(printf '%s\n' "$CMD" | sed 's/&&/\n/g; s/;/\n/g; s/|/\n/g')
+SEGMENTS_EOF
     # Redirection into a test file is an edit by another name.
     if printf '%s' "$CMD" | grep -qE '>[[:space:]]*[^[:space:]]*\.(test|spec)\.' ; then
       block "shell redirection into a locked test file" "$CMD"
