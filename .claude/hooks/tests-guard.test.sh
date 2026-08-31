@@ -16,42 +16,85 @@ export CLAUDE_PROJECT_DIR
 
 PASS=0
 FAIL=0
+# "Should this repository be locked?" is answered by git, not by whether a
+# previous run happened to leave the file lying around. Reading it from the
+# filesystem is what deleted the marker for real: a run that started while the
+# marker was already absent recorded MARKER_PREEXISTING=0, and its teardown then
+# removed the marker it had written — leaving no marker and no backup, which is
+# indistinguishable from "there was never a lock". Git knows the difference.
 MARKER_PREEXISTING=0
-[ -f "$MARKER" ] && MARKER_PREEXISTING=1
+if [ -f "$MARKER" ]; then
+  MARKER_PREEXISTING=1
+elif git -C "$REPO_ROOT" cat-file -e HEAD:.tests-locked 2>/dev/null; then
+  MARKER_PREEXISTING=1
+  printf 'The lock marker was missing at start; HEAD says it should exist.\n' >&2
+  printf 'Restoring it before the suite runs.\n' >&2
+  git -C "$REPO_ROOT" checkout -- .tests-locked 2>/dev/null || :
+fi
 
-# This suite parks the real marker, writes a fake over it, and restores at the
-# end. Between those two points the repository has no lock: the guard's very
-# first line is `[ -f "$MARKER" ] || exit 0`, so an interrupted run leaves every
-# locked test editable by plain Write, silently, with no refusal printed.
+# This suite no longer touches the repository's own marker.
 #
-# That is not hypothetical. An evaluation's run was killed by a timeout,
-# `git status` showed ` D .tests-locked`, and a second run then computed
-# MARKER_PREEXISTING from the fake and clobbered the real backup. Recovery was
-# accidental. The window was about two and a half minutes wide, and AGENTS.md
-# tells agents to run these suites.
+# It used to park the real `.tests-locked`, write a 0-byte fake over it, and
+# restore at the end. Everything between those points was a window in which the
+# repository had no lock — the guard's first line is `[ -f "$MARKER" ] || exit 0`
+# — and three separate incidents came out of it:
 #
-# Restore on every exit path, not just the happy one. Refuse to start if a
-# previous run left its backup behind, rather than overwriting it.
+#   1. A run killed by a timeout left ` D .tests-locked`; the next run read its
+#      "was there a lock?" flag from the fake and clobbered the real backup.
+#   2. A run that began while the marker was absent recorded "no lock here" and
+#      its teardown deleted the marker it had written. No marker, no backup.
+#   3. Twice, the Stop hook committed the transient state: `.tests-locked` as
+#      0 bytes and `.tests-locked.testbak` as a tracked file. Pushed, that would
+#      have emptied the frozen list and made this suite refuse to start on every
+#      fresh clone. Both were caught before they left the machine.
+#
+# A trap fixes (1) and (2) and cannot fix (3), because the hook that commits
+# runs outside this process. The fix that closes all three is to stop creating
+# the state at all:
+#
+#   - LOCKED cases use the repository's real marker exactly as it is. The guard
+#     tests existence, not content, so there is nothing to fake.
+#   - UNLOCKED cases point CLAUDE_PROJECT_DIR at an empty temp directory. The
+#     guard computes its marker path from that, finds none, and exits 0 — which
+#     is precisely the behaviour under test — while the repository is untouched.
+#
+# Nothing is moved, nothing is overwritten, and there is no window.
+
+# An empty directory outside the repository, for the unlocked assertions.
+UNLOCKED_DIR=${TMPDIR:-/tmp}/tests-guard-unlocked.$$
+mkdir -p "$UNLOCKED_DIR"
+
+cleanup() {
+  status=$?
+  [ -d "$UNLOCKED_DIR" ] && command rm -rf "$UNLOCKED_DIR"
+  exit $status
+}
+trap cleanup EXIT INT TERM HUP
+
+# A stale backup from the old park-and-restore scheme still means a previous run
+# died mid-way. Say so and stop, rather than running against a fake.
 if [ -f "$MARKER.testbak" ]; then
   printf 'A previous run left %s behind.\n' "$MARKER.testbak" >&2
-  printf 'Restore it first: mv "%s" "%s"\n' "$MARKER.testbak" "$MARKER" >&2
+  # Two different hooks refuse different repairs, and each attempt at this line
+  # moved which one objected. Measured with the marker present, which is the
+  # state that prints this:
+  #   mv  .tests-locked.testbak .tests-locked   → tests-guard refuses
+  #   git checkout -- .tests-locked             → destructive-guard refuses
+  #   git restore .tests-locked                 → destructive-guard refuses
+  #   git cat-file blob HEAD:… > .tests-locked  → tests-guard refuses
+  #   cp  .tests-locked.testbak .tests-locked   → both allow
+  # The `cp` is also the correct repair: it overwrites the fake with the real
+  # content.
+  printf 'Restore it first: cp "%s" "%s"\n' "$MARKER.testbak" "$MARKER" >&2
+  printf 'Then: rm -f "%s"\n' "$MARKER.testbak" >&2
   exit 1
 fi
 
-restore_marker() {
-  status=$?
-  if [ -f "$MARKER.testbak" ]; then
-    mv -f "$MARKER.testbak" "$MARKER"
-  elif [ "$MARKER_PREEXISTING" -eq 1 ] && [ ! -f "$MARKER" ]; then
-    # The backup is gone and the real marker is not back: recover from git
-    # rather than leaving the repository unlocked.
-    git -C "$REPO_ROOT" checkout -- .tests-locked 2>/dev/null || :
-  elif [ "$MARKER_PREEXISTING" -eq 0 ]; then
-    [ -f "$MARKER" ] && command rm -f "$MARKER"
-  fi
-  exit $status
-}
-trap restore_marker EXIT INT TERM HUP
+if [ "$MARKER_PREEXISTING" -eq 0 ]; then
+  printf 'HEAD carries no lock marker, so the LOCKED cases cannot run.\n' >&2
+  printf 'This suite no longer creates one — it uses the repository as it is.\n' >&2
+  exit 1
+fi
 
 payload() {
   node -e '
@@ -80,16 +123,19 @@ expect() {
   fi
 }
 
+# Pointed at an empty directory, the guard computes a marker path that does not
+# exist and exits 0 at its first line — which is exactly the behaviour under
+# test. The repository's own marker is never moved, so there is no window in
+# which this repo is unlocked and nothing for the Stop hook to sweep.
 printf '=== UNLOCKED: guard is inert ===\n'
-[ "$MARKER_PREEXISTING" -eq 0 ] || : > /dev/null
-if [ "$MARKER_PREEXISTING" -eq 1 ]; then
-  mv "$MARKER" "$MARKER.testbak"
-fi
+CLAUDE_PROJECT_DIR=$UNLOCKED_DIR
 expect 0 "edit a test file while unlocked"   Edit file_path "src/audit.test.ts"
 expect 0 "snapshot update while unlocked"    Bash command "npx vitest -u"
+CLAUDE_PROJECT_DIR=$REPO_ROOT
 
+# From here the real marker is in force, as it already was before this suite
+# started. Nothing is written to it.
 printf '\n=== LOCKED: guard refuses ===\n'
-: > "$MARKER"
 # Every path here is tracked in HEAD. That is the point: the marker freezes the
 # list a human approved, and "approved" here means "already committed".
 expect 2 "edit a tracked test"               Edit file_path "tests/self-audit-green.test.ts"
@@ -260,9 +306,8 @@ expect 0 "edit production source"            Edit file_path "index.ts"
 expect 0 "run the suite without -u"          Bash command "npx vitest run"
 expect 0 "ordinary build"                    Bash command "npm run build"
 
-# The fake goes; the trap above puts the real one back on every exit path,
-# including the ones that never reach this line.
-command rm -f "$MARKER"
+# Nothing to tear down: the marker was never touched, and the temp directory
+# goes with the trap.
 
 printf '\n=== SUMMARY: %s passed, %s failed ===\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
