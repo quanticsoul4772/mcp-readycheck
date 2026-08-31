@@ -281,6 +281,8 @@ PATH_PAIRS_EOF
       # which let `npx vitest "-u"` through.
       SEG_TOKENS=$(printf '%s\n' "$seg" | xargs -n1 printf '%s\n' 2>/dev/null) ||
         SEG_TOKENS=$(printf '%s\n' "$seg" | tr ' \t' '\n\n')
+      # Folded once here, for the same reason as TOKENS_L below.
+      SEG_TOKENS=$(printf '%s\n' "$SEG_TOKENS" | tr 'A-Z' 'a-z')
 
       # The flag must come AFTER the runner, because that is how a flag reaches
       # a runner. Order is what separates `npx vitest -u` from
