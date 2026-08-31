@@ -171,9 +171,11 @@ lint or a hook.
   not minutes: waiting would have cost almost nothing.
   `.github/workflows/verdict.yml` fails a PR whose body carries no approving
   verdict naming the head commit, with `[plan]`/`[docs]` titles exempt only
-  when the diff is documentation-only. **It is not yet in ruleset `21871580`'s
-  required checks** — until it is, a red `verdict` is advisory, and that gap is
-  itself the "absent guard read as an allowance" failure described above.
+  when the diff is documentation-only. **It is now in ruleset `21871580`'s
+  required checks**, alongside `fast-checks` — confirmed against the API on
+  2026-08-31. Bypass is `RepositoryRole` 5 (admin), `bypass_mode: always`; that
+  entry exists because setting `bypass_actors: []` once left the repo owner with
+  no override at all and froze the repository behind a stalled evaluator.
 - **A gate that can be satisfied by its own subject is not a gate.** The first
   draft of `verdict.yml` could be passed three ways without an evaluator ever
   seeing the merged code: a verdict bound to no commit (approve a one-liner,
@@ -281,3 +283,153 @@ lint or a hook.
 - **On Git Bash, `cygpath -u "$TEMP"` is `/tmp`.** The Windows temp directory is
   mounted there, so `TMPDIR`, `TEMP`, `TMP`, and `/tmp` collapse to one root.
   A short roots list is correct, not a dropped entry — verify before "fixing" it.
+- **Evaluate before pushing, not after opening the PR.** `verdict` is a required
+  check that fails closed, so a PR whose body carries no verdict is red from the
+  moment it exists. Opening first and evaluating after put the operator in front
+  of a red required check on #18, #19 and #20, and the only lever they had was
+  the admin bypass. The order is: commit locally → run the evaluator against
+  that commit → push and `gh pr create --body-file` with the verdict already in
+  the body, in one step. Do not push the branch early either: GitHub shows a
+  "Compare & pull request" banner on any pushed branch, and acting on it is the
+  reasonable thing for a human to do. A BLOCK is fixed locally and re-evaluated
+  before anything reaches the remote. The gate was never the problem; the
+  sequence was.
+- **`gh pr edit --body-file` can fail on a repository with Projects (classic).**
+  The GraphQL mutation errors on `repository.pullRequest.projectCards` and the
+  body is left unchanged — with a warning, not a non-zero exit, so it reads as
+  success. Use `gh api repos/{owner}/{repo}/pulls/{n} -X PATCH -F body=@file`
+  and confirm by reading the body back.
+- **A guard scoped to a convenient token refuses the whole machine.**
+  `tests-guard` treated any bare `-u` as a snapshot-update flag and so refused
+  `git push -u`, `git branch -u`, `cygpath -u` and `sort -u` — none of which can
+  reach a test. The flag only means anything to a test runner, and it belongs to
+  the command segment it sits in, not to the line: `npm test && git push -u`
+  must pass. This is the same shape as the earlier `sed -i` false positive, and
+  the same lesson — scope a guard to the hazard.
+- **The lock froze two things nobody approved and one nobody meant to.** Once
+  `.tests-locked` became tracked, every branch inherits it from main, and
+  `is_test_path` matched `*.test.*` anywhere. Two consequences, both hit within
+  an hour: no plan PR can introduce the test file it exists to propose, and no
+  hook suite under `.claude/hooks` can be edited — including the suite that
+  proves this guard works. The lock covers the *approved product list*, so:
+  `.claude/hooks/**` is excluded outright (integrity.sh governs it, and refuses
+  every tool call while it drifts, which is stricter), and a test file absent
+  from HEAD and from the index is a proposal, not a locked test.
+- **Decide on a canonical path, or the exception becomes the bypass.** The first
+  draft of those two exceptions tested the raw string, and an evaluation
+  defeated it three ways by executing it: `tests/Readiness-Tool.test.ts` (git is
+  case-sensitive, NTFS is not, so an exact-case lookup called a locked file a
+  brand-new proposal — `fs.statSync` proved both spellings were the same 14625
+  bytes), `.claude/hooks/../../tests/readiness-tool.test.ts` (a substring test
+  is not a prefix test, and it short-circuited before the `..` check), and
+  `notes.claude/hooks/x/../../../tests/…` (the same substring inside another
+  name). Resolve `.` and `..`, normalise separators, reduce to repo-relative,
+  lower-case, then compare against `ls-files` ∪ `ls-tree HEAD`. Anything that
+  will not resolve and still looks like a test is refused. On a case-sensitive
+  filesystem this refuses a genuinely distinct file whose name differs only in
+  case — a fail-closed trade taken deliberately, because this repo lives on
+  NTFS, where those names are one file.
+- **Two spellings of one root, and one backslash written as two.** `/d/Projects/x`
+  and `D:/Projects/x` are the same directory; comparing them as strings makes
+  every path look external, and the fail-closed branch then refuses the hook's
+  own test suite. Separately, `node -e '…'` inside single quotes passes the JS
+  source through verbatim, so `.replace(/\\\\/g, "/")` compiles to a regex
+  matching *two* backslashes and silently leaves a Windows path unconverted.
+  Write `/\\/g`. Both bugs presented identically — "cannot resolve" on a path
+  that was obviously inside the repo.
+- **Lower-case before classifying, not only before looking up.** Round 2 of the
+  same evaluation refused the two case-variant strings round 1 had reported and
+  allowed the rest of the class: `TRACKED`/`is_tracked` were lower-cased, but
+  `is_test_path`'s globs were not, so `tests/Readiness-Tool.Test.ts` never
+  matched `*.test.*`, was never classified as a test, and the tracked-list
+  lookup it would have failed was never reached. `fs.statSync` showed the same
+  inode and the same 14625 bytes as the locked file. A classifier that gates a
+  case-insensitive comparison must itself be case-insensitive — and so must
+  `is_marker_path` and the redirect regex, because `rm .TESTS-LOCKED` deletes
+  the marker and turns the whole guard off. Pinning the literal strings an
+  evaluation reports, rather than the class behind them, is how a green suite
+  coexists with the bypass it was written for.
+- **A backslash continuation is not a command boundary.** The segmenter is a
+  per-line awk program, so `npx vitest \` + newline + `-u` became two segments —
+  runner in one, flag in the other — while the shell joins them and runs
+  `vitest -u`. Join continuations before segmenting.
+- **The `-c` argument is a command; segment it as one.** Splitting it on
+  whitespace collapsed its clause boundaries, so `sh -c "npm test && git push
+  -u origin main"` was refused while the identical unquoted line was allowed —
+  the exact false-positive class the change existed to remove. Feed the inner
+  command back through the same quote-aware segmenter.
+- **A flag before the runner is not the runner's flag.** `docker run -u 1000
+  node npm test` and `curl -u tok https://github.com/vitest-dev/vitest` both
+  carry a `-u` and a token whose basename reads as a runner. Requiring the flag
+  to *follow* the runner separates them, and a URL is never a runner.
+- **Simplifications in a guard become its gaps; count them before claiming a
+  number.** Two rounds in a row this file said "two gaps remain" and was wrong
+  both times, because each round's fix introduced or left one that the previous
+  count did not know about. What is actually uncovered, as of round 3:
+  `X=vitest; $X -u` and `echo -u | xargs npx vitest` need dataflow rather than
+  pattern matching; a `-c` argument containing a newline defeats the per-line
+  segmenter (quote state does not carry across lines, so the tokenizer falls
+  back and the flag survives glued to a quote); and a *nested* `-c`
+  (`sh -c "sh -c 'vitest -u'"`) survives because the extraction goes one level
+  only — single-line and balanced, so it is not the newline case above.
+  Closed since: case on runner and flag names, `bash -lc`
+  and `sh -euc` (a short-flag cluster ending in `c` is `-c`), and
+  `node file:///d/x/vitest -u` (matching `://` anywhere excluded a real runner
+  wearing a scheme; anchor on a leading scheme instead). Do not write a count
+  into this file — write the list, and let it grow.
+- **Fold the token and the pattern, or the pattern becomes dead code.** Folding
+  tokens before `is_update_flag` closed `npx VITEST -u` and simultaneously
+  opened `npx jest --updateSnapshot` — the pattern list still held the camelCase
+  literal, which a lowered token can never match. jest's documented long flag
+  went unrefused, and the only visible symptom was an unreachable branch in a
+  `case` nobody reads. An evaluation caught it by running the old guard and the
+  new one side by side on the same input, which is the technique to reach for
+  when a fix touches a comparison rather than a rule.
+- **A basename comparison has to survive the platform's extensions.**
+  `/usr/bin/rm.exe` exists on Git Bash and runs from it; comparing `${t##*/}`
+  against a bare `rm` let `rm.exe .tests-locked` delete the marker, and the
+  substring form it replaced never caught it either. Strip a trailing `.exe`.
+- **A suite that parks the guard's own switch must restore it on every exit
+  path.** `tests-guard.test.sh` moved the real `.tests-locked` aside, wrote a
+  fake over it, and restored at the end — with no `trap`. The guard's first line
+  is `[ -f "$MARKER" ] || exit 0`, so any interruption in that window left the
+  repository silently unlocked, every locked test editable by plain `Write`, and
+  no refusal printed. It happened during an evaluation: a run killed by a
+  timeout left ` D .tests-locked`, and the next run computed its "was there a
+  marker?" flag from the fake and clobbered the real backup. Recovery was
+  accidental. There is a `trap ... EXIT INT TERM HUP` now, it refuses to start
+  if a previous run's backup is still present, and it falls back to
+  `git checkout -- .tests-locked`. Verified by killing the suite mid-run.
+- **A guard runs on every tool call, so its cost is the session's cost.** A
+  `lower()` helper forking a subshell and a `tr` per token, inside a per-token
+  loop, cost about 1.8s on every Bash, Edit and Write. Fold the list once.
+- **`*verb\ *` has an end-of-line blind spot.** Every pattern in the marker
+  check required a trailing space, so `echo .tests-locked | xargs rm` matched
+  none of them and deleted the marker — after which `[ -f "$MARKER" ] || exit 0`
+  fires on every later call and every locked test is editable by plain `Write`
+  for the rest of the session. `xargs rm -f` was refused, so the escape was
+  precisely "verb is the last word on the line". Test whether a **token** is the
+  verb, not whether the line contains it followed by a space; that also stops it
+  matching inside `confirm`. This was the listed rule failing on whitespace, not
+  the open-enumeration limit below — `rm` was in the list the whole time.
+- **A verb enumeration is only as complete as the last person's shell.** The
+  marker check refuses `rm`, `unlink`, `mv`, `truncate`, `git clean`, and now
+  `shred` and `-delete`, because `shred -u .tests-locked` and `find . -name
+  .tests-locked -delete` both unlink it and both switch the entire guard off.
+  This repo's `destructive-guard.sh` covers neither, and the refusals seen
+  interactively for them come from an out-of-repo machine-level guard this file
+  already says not to rely on. The enumeration is not a closed set; treat a new
+  verb as expected, not as a surprise.
+- **The Bash-side write check only sees `>`.** `tee`, `cp /dev/null`, and
+  `sed -i` onto a locked test are not refused, and the redirect pattern matches
+  `.test.`/`.spec.` but not `.snap`. Known and unclosed — recorded so the next
+  reader does not mistake the guard for complete.
+- **Git Bash rewrites a POSIX path passed as argv to a native binary.**
+  `node -e '…' /elsewhere/x.test.ts` arrives as
+  `C:/Program Files/Git/elsewhere/x.test.ts`. That is how a real defect surfaced:
+  `for p in $PATHS` splits on spaces, so the rewritten path became two
+  fragments, neither of which looked like a tracked test, and a locked test
+  under any directory with a space in its name was unprotected. Read paths one
+  per line — `while IFS= read -r p` over a heredoc, which keeps the loop in the
+  current shell so a refusal can still `exit 2`. Found by running the suite; the
+  code read fine.
