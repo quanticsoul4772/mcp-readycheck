@@ -21,8 +21,11 @@ name: Verdict
 # cycle leaves behind, so the gate would have gone green on a live BLOCK.
 #
 # A non-approving verdict for the head commit fails even if an approving one
-# for an older commit is still in the body. The most recent judgement of the
-# code being merged is the one that counts.
+# for an older commit is still in the body — provided the blocking verdict is
+# valid JSON. A malformed one is skipped as prose, which is a real limit and
+# not a claim of completeness: an author who wants to suppress a blocking
+# verdict omits it entirely, and nothing here detects that. The gate is
+# evidence that a verdict exists, never that it is honest.
 #
 # merge_group is deliberately NOT a trigger. Gating a step on the event type
 # while declaring the trigger makes a merge-group run report success having
@@ -126,19 +129,19 @@ jobs:
               try {
                 parsed = JSON.parse(trimmed);
               } catch {
-                // A block that mentions a verdict but will not parse is not
-                // prose to skip over. Skipping it is how a BLOCK with one
-                // trailing comma disappears while a reader still sees the word
-                // in the body — so an unparseable verdict-shaped block fails.
-                if (/"verdict"/.test(trimmed) && trimmed !== body.trim()) {
-                  core.setFailed(
-                    'A block in the PR body mentions "verdict" but is not valid JSON, ' +
-                      'so it cannot be read. Fix the JSON rather than leaving it ambiguous:\n' +
-                      trimmed.slice(0, 400),
-                  );
-                  return;
-                }
-                continue; // ordinary prose
+                // Prose, or a fenced block that is not JSON. Skipped.
+                //
+                // A previous revision failed here when the block contained the
+                // word "verdict", reasoning that a BLOCK malformed by one
+                // trailing comma would otherwise vanish. That rule was removed:
+                // it hard-failed any PR whose body quotes this workflow's own
+                // contract line — which is not valid JSON, appears verbatim in
+                // the header above and in AGENTS.md, and is quoted most often
+                // by exactly the PRs that touch this file. It also bought
+                // nothing: an author who wants to hide a blocking verdict omits
+                // it, which no check here can see, so malforming it is strictly
+                // harder and no more effective.
+                continue;
               }
               if (parsed && typeof parsed === 'object' && typeof parsed.verdict === 'string') {
                 verdicts.push(parsed);
