@@ -150,6 +150,20 @@ expect 2 "flag with an = value"              Bash command "npx vitest --update-s
 # guard that refuses commit messages is the false-positive class this repo has
 # already paid for twice.
 expect 0 "runner named in a commit message"  Bash command "git commit -m \"ran vitest -u earlier\""
+# A backslash continuation is not a command boundary. The per-line segmenter
+# put the runner in one segment and the flag in the next, while the shell joins
+# them and runs `vitest -u`. Not a dataflow problem — pure pattern work.
+expect 2 "backslash continuation"            Bash command "npx vitest \\
+  -u"
+# The -c argument is a command, so it is segmented as one. Splitting it on
+# whitespace collapsed its clause boundaries and refused these two while the
+# identical unquoted lines were allowed.
+expect 0 "quoted compound under sh -c"       Bash command "sh -c \"npm test && git push -u origin main\""
+expect 0 "quoted pipeline under sh -c"       Bash command "sh -c \"npm test | sort -u\""
+# A URL is never a runner, and a flag that precedes the runner is not the
+# runner's flag.
+expect 0 "curl against a vitest repo"        Bash command "curl -u tok https://github.com/vitest-dev/vitest"
+expect 0 "docker run -u before the runner"   Bash command "docker run -u 1000 node npm test"
 expect 2 "path escaping the repo"            Edit file_path "../outside/other.test.ts"
 
 printf '\n=== LOCKED: non-test work still flows ===\n'
