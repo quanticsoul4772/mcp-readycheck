@@ -203,9 +203,15 @@ lint or a hook.
   backstop` commit, on top of a reviewed fix. It never reached the remote, so
   the PR head stayed at the approved commit, and the local branch was realigned
   with `git branch -f` to the remote — a pointer move, not a history rewrite,
-  with the dropped commit still in the reflog. `git reset` and `git revert` are
-  denied by the global guard anyway. Scratch now belongs in the job temp
-  directory, and `.gitignore` covers the patterns that leaked.
+  with the dropped commit still in the reflog. Scratch now belongs in the job
+  temp directory, and `.gitignore` covers the patterns that leaked.
+
+  On what actually stops a rewrite: **this repo's `destructive-guard.sh` blocks
+  only `git reset --hard`** — it has no rule for plain `git reset` and none for
+  `git revert` at all. Those were refused in the session that hit this by the
+  operator's own machine-level settings, which are outside this repository and
+  may not apply to you. Do not read the repo's guard as a backstop it is not.
+  An earlier draft of this entry claimed otherwise and an evaluation caught it.
 - **The verdict block needs a field the evaluator does not emit on its own.**
   `verdict.yml` requires `{"verdict": …, "evaluated_commit": "<head sha>"}` in
   one object, but `.claude/agents/evaluator.md` specifies only
