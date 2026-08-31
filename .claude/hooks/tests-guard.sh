@@ -17,12 +17,18 @@
 #     branch inherits it, so refusing unknown paths meant a plan PR could never
 #     introduce the test file it exists to propose.
 #
-# Both exceptions are decided on a CANONICAL repo-relative path. An earlier
-# revision tested the raw string and was defeated three ways in evaluation:
-# `tests/Readiness-Tool.test.ts` (git is case-sensitive, NTFS is not),
-# `.claude/hooks/../../tests/readiness-tool.test.ts` (substring match on an
-# unresolved path), and `notes.claude/hooks/x/../../../tests/…` (the same
-# substring appearing inside another name). Resolve first, then decide.
+# Every path decision is made on a CANONICAL, LOWER-CASED repo-relative path.
+# Three evaluation rounds took three tries to get that right:
+#   1. raw-string matching: `.claude/hooks/../../tests/x.test.ts` walked out of
+#      the exclusion, and `notes.claude/hooks/…` matched the substring.
+#   2. canonical path, lower-cased only for the tracked-list lookup: the
+#      classifier globs stayed case-sensitive, so `tests/Readiness-Tool.Test.ts`
+#      was never classified as a test at all and the lookup never ran. Same
+#      inode, same 14625 bytes, and a Write would have truncated it.
+#   3. lower-case before classifying, which is this file.
+# On a case-sensitive filesystem this refuses a genuinely distinct file whose
+# name differs only in case. That is a fail-closed trade, taken deliberately:
+# this repo lives on NTFS, where those names are the same file.
 #
 # Contract: exit 0 allows, exit 2 blocks with the reason on stderr.
 set -u
@@ -37,8 +43,8 @@ MARKER=$REPO_ROOT/.tests-locked
 
 PAYLOAD=$(cat)
 
-# Node does the JSON parsing and the path canonicalisation together: `..` and
-# `.` are resolved, separators normalised, and each path reduced to a
+# Node does the JSON parsing and the path canonicalisation together: `.` and
+# `..` are resolved, separators normalised, and each path reduced to a
 # repo-relative form or reported as outside the repo. Doing this in sh invited
 # exactly the traversal bugs above.
 HOOK_REPO_ROOT=$REPO_ROOT
@@ -70,8 +76,8 @@ process.stdin.on("end", () => {
 
   // Git Bash and the harness disagree about how to spell a Windows root:
   // "/d/Projects/x" and "D:/Projects/x" are the same directory. Comparing them
-  // as strings makes every path look like it is outside the repo, which the
-  // fail-closed branch then refuses — including this hook'"'"'s own test suite.
+  // as strings makes every path look external, and the fail-closed branch then
+  // refuses this hook s own test suite.
   const winish = (s) => {
     const m = /^\/([A-Za-z])(\/.*)?$/.exec(s);
     return m ? m[1].toUpperCase() + ":" + (m[2] || "/") : s;
@@ -102,6 +108,7 @@ process.stdin.on("end", () => {
 [ -z "$FIELDS" ] && exit 0
 
 d64() { printf '%s' "$1" | base64 -d 2>/dev/null; }
+lower() { printf '%s' "$1" | tr 'A-Z' 'a-z'; }
 
 TOOL=$(d64 "$(printf '%s\n' "$FIELDS" | sed -n 's/^TOOL=//p')")
 CMD=$(d64 "$(printf '%s\n' "$FIELDS" | sed -n 's/^CMD=//p')")
@@ -115,12 +122,8 @@ block() {
   exit 2
 }
 
-# Every path git knows about, in HEAD or in the index, lower-cased.
-#
-# Lower-cased because `git cat-file -e HEAD:<p>` and `git ls-files
-# --error-unmatch` are case-sensitive while this filesystem is not: writing
-# `tests/Readiness-Tool.test.ts` truncates the tracked lower-case file, and an
-# exact-case lookup called it a brand-new proposal.
+# Every path git knows about, in HEAD or in the index, lower-cased. `git
+# cat-file` and `git ls-files` are case-sensitive and this filesystem is not.
 TRACKED=$(
   {
     git -C "$REPO_ROOT" ls-files 2>/dev/null
@@ -128,14 +131,16 @@ TRACKED=$(
   } | tr 'A-Z' 'a-z' | sed '/^$/d' | sort -u
 )
 
+# Callers pass an already-lower-cased path.
 is_tracked() {
   [ -n "$1" ] || return 1
-  printf '%s\n' "$TRACKED" | grep -Fxq "$(printf '%s' "$1" | tr 'A-Z' 'a-z')"
+  printf '%s\n' "$TRACKED" | grep -Fxq "$1"
 }
 
 # The marker itself is protected while it is in force. Editing it would let an
 # agent rewrite the lock; deleting it would let one lift the lock and then edit
-# every test freely. Reading it is untouched — S3 must `ls` it.
+# every test freely. `.TESTS-LOCKED` names the same file on this volume — an
+# evaluation deleted it that way — so this too matches on the lower-cased form.
 is_marker_path() {
   case "$1" in
     .tests-locked|*/.tests-locked) return 0 ;;
@@ -143,7 +148,6 @@ is_marker_path() {
   esac
 }
 
-# Decided on the canonical repo-relative path, never on the raw string.
 is_test_path() {
   [ -n "$1" ] || return 1
   case "$1" in
@@ -155,15 +159,6 @@ is_test_path() {
   esac
 }
 
-# A test file git has never seen is a proposal, not part of the approved list.
-# Fails closed: an empty canonical path — anything outside the repo, or that
-# the canonicaliser could not resolve — is not a proposal.
-is_new_test_file() {
-  [ -n "$1" ] || return 1
-  is_tracked "$1" && return 1
-  return 0
-}
-
 case "$TOOL" in
   Edit|Write|NotebookEdit|MultiEdit)
     # One pair per line: base64(raw) SP base64(canonical). Never `for p in
@@ -173,8 +168,10 @@ case "$TOOL" in
       [ -z "$pair" ] && continue
       raw=$(d64 "${pair%% *}")
       rel=$(d64 "${pair#* }")
+      rel_l=$(lower "$rel")
+      raw_l=$(lower "$(printf '%s' "$raw" | tr '\134' '/')")
 
-      if is_marker_path "$rel" || is_marker_path "$raw"; then
+      if is_marker_path "$rel_l" || is_marker_path "$raw_l"; then
         block "edit to the lock marker itself" "$TOOL $raw"
       fi
 
@@ -182,7 +179,7 @@ case "$TOOL" in
       # is never "safe". The raw string is checked too, so a path outside the
       # repo cannot slip through on an empty canonical form.
       if [ -z "$rel" ]; then
-        case "$(printf '%s' "$raw" | tr '\134' '/')" in
+        case "$raw_l" in
           *.test.*|*.spec.*|*__tests__/*|*__snapshots__/*|*.snap)
             block "edit to a test file the guard cannot resolve" "$TOOL $raw"
             ;;
@@ -190,11 +187,13 @@ case "$TOOL" in
         continue
       fi
 
-      if is_test_path "$rel"; then
-        if is_new_test_file "$rel"; then
-          continue
+      if is_test_path "$rel_l"; then
+        # A test file git has never seen is a proposal, not part of the
+        # approved list.
+        if is_tracked "$rel_l"; then
+          block "edit to a locked test file" "$TOOL $raw"
         fi
-        block "edit to a locked test file" "$TOOL $raw"
+        continue
       fi
     done <<PATH_PAIRS_EOF
 $PATH_PAIRS
@@ -204,12 +203,30 @@ PATH_PAIRS_EOF
   Bash)
     [ -z "$CMD" ] && exit 0
 
+    # A backslash continuation is not a command boundary. The segmenter below
+    # is a per-line awk program, so `npx vitest \` + newline + `-u` became two
+    # segments — runner in one, flag in the other — while the shell joins them
+    # and runs `vitest -u`. Join first.
+    CMD_JOINED=$(printf '%s\n' "$CMD" | awk '
+      { line = $0
+        if (buf != "") { line = buf line; buf = "" }
+        if (sub(/\\$/, "", line)) { buf = line; next }
+        print line }
+      END { if (buf != "") print buf }')
+
+    # The argument of a `-c` is a command, and it is segmented as one. An
+    # earlier revision split it on whitespace instead, which collapsed its
+    # clause boundaries: `sh -c "npm test && git push -u origin main"` was
+    # refused while the identical unquoted line was allowed — the exact
+    # false-positive class this change exists to remove.
+    INNER=$(printf '%s\n' "$CMD_JOINED" | xargs -n1 printf '%s\n' 2>/dev/null | awk '
+      { if (prev == "-c") print; prev = $0 }')
+
     # Quote-aware segmentation, the same splitter destructive-guard uses. A
     # naive `sed s/|/\n/g` cuts `--testNamePattern='a|b' -u` in half and drops
-    # the flag into a fragment with no runner in it — the exact defect already
-    # in the mistake log as "split a command line on unquoted separators only",
-    # which an evaluation reproduced here by executing it.
-    SEGMENTS=$(printf '%s\n' "$CMD" | awk '
+    # the flag into a fragment with no runner in it — the defect already in the
+    # mistake log as "split a command line on unquoted separators only".
+    SEGMENTS=$(printf '%s\n%s\n' "$CMD_JOINED" "$INNER" | awk '
       { s=$0; out=""; q="";
         for (i=1; i<=length(s); i++) { c=substr(s,i,1);
           if (q != "") { if (c==q) q=""; out = out c; continue }
@@ -219,17 +236,11 @@ PATH_PAIRS_EOF
         print out }')
 
     # A runner is recognised by the basename of any token, so
-    # `./node_modules/.bin/jest` counts. `sh -c "vitest -u"` is covered because
-    # the tokenizer strips the quotes and the inner words become tokens of the
-    # same segment.
-    #
-    # Known gaps, stated rather than papered over: a runner reached through a
-    # variable (`X=vitest; $X -u`) or assembled by another process
-    # (`echo -u | xargs npx vitest`) is not recognised. Both need dataflow, not
-    # pattern matching. The lock exists to make an edit visible, not to make
-    # one impossible — an agent doing either is plainly working around it, and
-    # that shows in the diff.
+    # `./node_modules/.bin/jest` counts. A URL is never a runner: `curl -u tok
+    # https://github.com/vitest-dev/vitest` ends in a basename that looks like
+    # one.
     is_runner_token() {
+      case "$1" in *://*) return 1 ;; esac
       base=${1##*/}
       case "$base" in
         vitest|jest|mocha|ava|tap|playwright|cypress|karma|nyc|c8) return 0 ;;
@@ -245,6 +256,10 @@ PATH_PAIRS_EOF
       return 1
     }
 
+    # Known gaps, stated rather than papered over: a runner reached through a
+    # variable (`X=vitest; $X -u`) or assembled by another process
+    # (`echo -u | xargs npx vitest`) is not recognised. Both need dataflow, not
+    # pattern matching. The lock exists to make an edit visible, not impossible.
     while IFS= read -r seg; do
       [ -z "$seg" ] && continue
 
@@ -253,23 +268,17 @@ PATH_PAIRS_EOF
       SEG_TOKENS=$(printf '%s\n' "$seg" | xargs -n1 printf '%s\n' 2>/dev/null) ||
         SEG_TOKENS=$(printf '%s\n' "$seg" | tr ' \t' '\n\n')
 
-      # `sh -c "vitest -u"` arrives as three tokens, the last of which is the
-      # whole inner command. Expand the argument of a `-c` so the words inside
-      # it are scanned too. Only after `-c`: splitting every token on
-      # whitespace would make `git commit -m "ran vitest -u"` a refusal, and a
-      # guard that refuses commit messages is the false-positive class this
-      # repo has already paid for twice.
-      SEG_TOKENS=$(printf '%s\n' "$SEG_TOKENS" | awk '
-        { if (prev == "-c") { n = split($0, w, /[ \t]+/); for (i = 1; i <= n; i++) if (w[i] != "") print w[i] }
-          print; prev = $0 }')
-
+      # The flag must come AFTER the runner, because that is how a flag reaches
+      # a runner. Order is what separates `npx vitest -u` from
+      # `docker run -u 1000 node npm test`, where the `-u` belongs to docker.
       runner=0
       prev=""
       while IFS= read -r t; do
         [ -z "$t" ] && continue
+        if [ "$runner" -eq 1 ] && is_update_flag "$t"; then
+          block "snapshot-update flag on a test runner while tests are locked" "$CMD"
+        fi
         if is_runner_token "$t"; then runner=1; fi
-        # `npm test`, `npm run test:unit`, `yarn test`, `bun test`,
-        # `deno test`, `node --test`.
         case "$prev" in
           npm|pnpm|yarn|bun|deno|run)
             case "$t" in test|test:*|*:test) runner=1 ;; esac
@@ -280,25 +289,15 @@ PATH_PAIRS_EOF
       done <<SEG_TOKENS_EOF
 $SEG_TOKENS
 SEG_TOKENS_EOF
-
-      [ "$runner" -eq 1 ] || continue
-
-      while IFS= read -r t; do
-        [ -z "$t" ] && continue
-        if is_update_flag "$t"; then
-          block "snapshot-update flag on a test runner while tests are locked" "$CMD"
-        fi
-      done <<SEG_FLAGS_EOF
-$SEG_TOKENS
-SEG_FLAGS_EOF
     done <<SEGMENTS_EOF
 $SEGMENTS
 SEGMENTS_EOF
 
     # Redirection into a test file is an edit by another name. Kept on the raw
     # command: a redirect target is a shell word, not a tool argument, and the
-    # canonicaliser never sees it.
-    if printf '%s' "$CMD" | grep -qE '>[[:space:]]*[^[:space:]]*\.(test|spec)\.' ; then
+    # canonicaliser never sees it. Case-insensitive for the same reason the
+    # path checks are.
+    if printf '%s' "$CMD" | grep -qiE '>[[:space:]]*[^[:space:]]*\.(test|spec)\.' ; then
       block "shell redirection into a locked test file" "$CMD"
     fi
 
@@ -307,9 +306,9 @@ SEGMENTS_EOF
     TOKENS=$(printf '%s\n' "$CMD" | xargs -n1 printf '%s\n' 2>/dev/null) || TOKENS=""
     [ -z "$TOKENS" ] && TOKENS=$(printf '%s\n' "$CMD" | tr ' \t' '\n\n')
     for t in $TOKENS; do
-      case "$t" in
+      case "$(lower "$t")" in
         *.tests-locked)
-          case "$CMD" in
+          case "$(lower "$CMD")" in
             *rm\ *|*rm\	*|*unlink\ *|*del\ *|*erase\ *|*mv\ *|*"git clean"*|*truncate\ *)
               block "removal or move of the lock marker" "$CMD"
               ;;
@@ -317,7 +316,7 @@ SEGMENTS_EOF
           ;;
       esac
     done
-    if printf '%s' "$CMD" | grep -qE '>[[:space:]]*[^[:space:]]*\.tests-locked' ; then
+    if printf '%s' "$CMD" | grep -qiE '>[[:space:]]*[^[:space:]]*\.tests-locked' ; then
       block "shell redirection into the lock marker" "$CMD"
     fi
     exit 0
