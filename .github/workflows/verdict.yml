@@ -139,9 +139,18 @@ jobs:
               return;
             }
 
-            const namesHead = (v) =>
-              typeof v.evaluated_commit === 'string' &&
-              (v.evaluated_commit.startsWith(shortSha) || headSha.startsWith(v.evaluated_commit));
+            // The value must be a real abbreviated SHA before it is compared.
+            // `headSha.startsWith(c)` is true for the empty string and for any
+            // single leading character, so an unconstrained prefix match would
+            // let {"evaluated_commit": ""} name every commit there is.
+            const namesHead = (v) => {
+              const c =
+                typeof v.evaluated_commit === 'string'
+                  ? v.evaluated_commit.trim().toLowerCase()
+                  : '';
+              if (!/^[0-9a-f]{7,40}$/.test(c)) return false;
+              return headSha.startsWith(c);
+            };
 
             const forHead = verdicts.filter(namesHead);
 
