@@ -324,8 +324,11 @@ lint or a hook.
   is not a prefix test, and it short-circuited before the `..` check), and
   `notes.claude/hooks/x/../../../tests/…` (the same substring inside another
   name). Resolve `.` and `..`, normalise separators, reduce to repo-relative,
-  compare case-insensitively against `ls-files` ∪ `ls-tree HEAD` — then decide.
-  Anything that will not resolve and still looks like a test is refused.
+  lower-case, then compare against `ls-files` ∪ `ls-tree HEAD`. Anything that
+  will not resolve and still looks like a test is refused. On a case-sensitive
+  filesystem this refuses a genuinely distinct file whose name differs only in
+  case — a fail-closed trade taken deliberately, because this repo lives on
+  NTFS, where those names are one file.
 - **Two spellings of one root, and one backslash written as two.** `/d/Projects/x`
   and `D:/Projects/x` are the same directory; comparing them as strings makes
   every path look external, and the fail-closed branch then refuses the hook's
@@ -334,13 +337,35 @@ lint or a hook.
   matching *two* backslashes and silently leaves a Windows path unconverted.
   Write `/\\/g`. Both bugs presented identically — "cannot resolve" on a path
   that was obviously inside the repo.
-- **The runner allow-list has two gaps, and they are gaps, not oversights.**
-  `X=vitest; $X -u` and `echo -u | xargs npx vitest` are not recognised: both
-  need dataflow, not pattern matching. Everything reachable by pattern is
-  covered — the basename of any token (`./node_modules/.bin/jest`), the
-  argument of a `-c` (`sh -c "vitest -u"`), `npm run test:unit`, `deno test`,
-  `--update-snapshot=true`. Expanding *every* token on whitespace would close
-  the first gap and refuse `git commit -m "ran vitest -u earlier"`, which is the
+- **Lower-case before classifying, not only before looking up.** Round 2 of the
+  same evaluation refused the two case-variant strings round 1 had reported and
+  allowed the rest of the class: `TRACKED`/`is_tracked` were lower-cased, but
+  `is_test_path`'s globs were not, so `tests/Readiness-Tool.Test.ts` never
+  matched `*.test.*`, was never classified as a test, and the tracked-list
+  lookup it would have failed was never reached. `fs.statSync` showed the same
+  inode and the same 14625 bytes as the locked file. A classifier that gates a
+  case-insensitive comparison must itself be case-insensitive — and so must
+  `is_marker_path` and the redirect regex, because `rm .TESTS-LOCKED` deletes
+  the marker and turns the whole guard off. Pinning the literal strings an
+  evaluation reports, rather than the class behind them, is how a green suite
+  coexists with the bypass it was written for.
+- **A backslash continuation is not a command boundary.** The segmenter is a
+  per-line awk program, so `npx vitest \` + newline + `-u` became two segments —
+  runner in one, flag in the other — while the shell joins them and runs
+  `vitest -u`. Join continuations before segmenting.
+- **The `-c` argument is a command; segment it as one.** Splitting it on
+  whitespace collapsed its clause boundaries, so `sh -c "npm test && git push
+  -u origin main"` was refused while the identical unquoted line was allowed —
+  the exact false-positive class the change existed to remove. Feed the inner
+  command back through the same quote-aware segmenter.
+- **A flag before the runner is not the runner's flag.** `docker run -u 1000
+  node npm test` and `curl -u tok https://github.com/vitest-dev/vitest` both
+  carry a `-u` and a token whose basename reads as a runner. Requiring the flag
+  to *follow* the runner separates them, and a URL is never a runner.
+- **Two gaps remain in the runner allow-list, and they are gaps, not
+  oversights.** `X=vitest; $X -u` and `echo -u | xargs npx vitest` need
+  dataflow, not pattern matching. Closing the first by expanding every token on
+  whitespace refuses `git commit -m "ran vitest -u earlier"`, which is the
   false-positive class this repo has already paid for twice. The lock exists to
   make an edit visible, not impossible.
 - **Git Bash rewrites a POSIX path passed as argv to a native binary.**
