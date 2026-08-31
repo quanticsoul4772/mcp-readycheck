@@ -318,7 +318,7 @@ SEGMENTS_EOF
       case "$(lower "$t")" in
         *.tests-locked)
           case "$(lower "$CMD")" in
-            *rm\ *|*rm\	*|*unlink\ *|*del\ *|*erase\ *|*mv\ *|*"git clean"*|*truncate\ *)
+            *rm\ *|*rm\	*|*unlink\ *|*del\ *|*erase\ *|*mv\ *|*"git clean"*|*truncate\ *|*shred\ *|*-delete*)
               block "removal or move of the lock marker" "$CMD"
               ;;
           esac
