@@ -47,7 +47,11 @@ fi
 # previous run left its backup behind, rather than overwriting it.
 if [ -f "$MARKER.testbak" ]; then
   printf 'A previous run left %s behind.\n' "$MARKER.testbak" >&2
-  printf 'Restore it first: mv "%s" "%s"\n' "$MARKER.testbak" "$MARKER" >&2
+  # Not `mv`: the guard refuses `mv` beside a `.tests-locked` token, so the
+  # obvious instruction is one the reader cannot follow in the state that
+  # prints it.
+  printf 'Restore it first: git checkout -- .tests-locked\n' >&2
+  printf 'Then remove the stale backup: %s\n' "$MARKER.testbak" >&2
   exit 1
 fi
 
