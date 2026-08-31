@@ -118,6 +118,10 @@ case "$TOOL" in
         block "edit to the lock marker itself" "$TOOL $p"
       fi
       if is_test_path "$p"; then
+        # A file nobody has approved yet is a proposal, not part of the list.
+        if is_new_test_file "$p"; then
+          continue
+        fi
         block "edit to a locked test file" "$TOOL $p"
       fi
     done
