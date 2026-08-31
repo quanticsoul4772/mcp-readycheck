@@ -84,6 +84,36 @@ export const auditOutputSchema = z.object({
     ),
 });
 
+// --- tool inputs ---------------------------------------------------------
+//
+// Every constraint carries its own message. Zod's defaults — "Too small:
+// expected string to have >=1 characters", "Invalid input: expected string,
+// received undefined" — name a schema internal the caller cannot act on, and
+// mcp-use emits them verbatim before any handler runs, so a handler-side
+// rewrite can never reach them. Both the type error and the length error need
+// a message: `.min(1, "…")` alone still leaves a missing key answering with
+// Zod's default text.
+
+const serverIdSchema = z
+  .string({ error: "serverId must be a Manufact server id, given as text." })
+  .min(1, "serverId is required. Pass the id of the Manufact server to audit.")
+  .describe("Manufact server id to audit, e.g. a9f68f45-7160-4b30-8855-06399bd6aebb");
+
+export const startAuditInputSchema = z.object({
+  serverId: serverIdSchema,
+});
+
+export const getAuditInputSchema = z.object({
+  serverId: z
+    .string({ error: "serverId must be a Manufact server id, given as text." })
+    .min(1, "serverId is required. Pass the id of the server the audit belongs to.")
+    .describe("Manufact server id the audit belongs to"),
+  auditId: z
+    .string({ error: "auditId must be an audit id, given as text." })
+    .min(1, "auditId is required. Use the id that start_audit returned.")
+    .describe("Audit id returned by start_audit"),
+});
+
 export const startAuditOutputSchema = z.object({
   auditId: z.string().describe("The created audit's id"),
   status: auditStatusSchema.describe("The audit's state at creation — pending or running"),
