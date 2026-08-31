@@ -330,9 +330,13 @@ SEGMENTS_EOF
     # the verb was the last word on the line. A token test has no end-of-line
     # blind spot, and it stops matching inside words as a bonus.
     REMOVAL_VERB=0
-    for t in $TOKENS; do
-      tl=$(lower "$t")
-      case "${tl##*/}" in
+    for tl in $TOKENS_L; do
+      base=${tl##*/}
+      # `/usr/bin/rm.exe` exists on Git Bash and runs from it. Comparing the
+      # basename against a bare `rm` let the `.exe` suffix walk past — and the
+      # substring form this replaced never caught it either.
+      case "$base" in *.exe) base=${base%.exe} ;; esac
+      case "$base" in
         rm|rmdir|unlink|del|erase|mv|shred|truncate) REMOVAL_VERB=1 ;;
       esac
     done
