@@ -56,10 +56,11 @@ expect 0 "snapshot update while unlocked"    Bash command "npx vitest -u"
 
 printf '\n=== LOCKED: guard refuses ===\n'
 : > "$MARKER"
-expect 2 "edit *.test.*"                     Edit file_path "src/audit.test.ts"
-expect 2 "edit *.spec.*"                     Write file_path "src/widget.spec.tsx"
-expect 2 "edit a snapshot"                   Edit file_path "src/__snapshots__/view.snap"
-expect 2 "edit under __tests__/"             Edit file_path "src/__tests__/helper.ts"
+# Every path here is tracked in HEAD. That is the point: the marker freezes the
+# list a human approved, and "approved" here means "already committed".
+expect 2 "edit a tracked test"               Edit file_path "tests/self-audit-green.test.ts"
+expect 2 "write a tracked test"              Write file_path "tests/readiness-tool.test.ts"
+expect 2 "edit the other tracked suite"      Edit file_path "tests/audit-report-view.test.ts"
 expect 2 "vitest -u"                         Bash command "npx vitest -u"
 expect 2 "jest --update-snapshot"            Bash command "npx jest --update-snapshot"
 expect 2 "redirect into a test file"         Bash command "echo x > src/audit.test.ts"
