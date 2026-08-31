@@ -281,3 +281,45 @@ lint or a hook.
 - **On Git Bash, `cygpath -u "$TEMP"` is `/tmp`.** The Windows temp directory is
   mounted there, so `TMPDIR`, `TEMP`, `TMP`, and `/tmp` collapse to one root.
   A short roots list is correct, not a dropped entry — verify before "fixing" it.
+- **Evaluate before pushing, not after opening the PR.** `verdict` is a required
+  check that fails closed, so a PR whose body carries no verdict is red from the
+  moment it exists. Opening first and evaluating after put the operator in front
+  of a red required check on #18, #19 and #20, and the only lever they had was
+  the admin bypass. The order is: commit locally → run the evaluator against
+  that commit → push and `gh pr create --body-file` with the verdict already in
+  the body, in one step. Do not push the branch early either: GitHub shows a
+  "Compare & pull request" banner on any pushed branch, and acting on it is the
+  reasonable thing for a human to do. A BLOCK is fixed locally and re-evaluated
+  before anything reaches the remote. The gate was never the problem; the
+  sequence was.
+- **`gh pr edit --body-file` can fail on a repository with Projects (classic).**
+  The GraphQL mutation errors on `repository.pullRequest.projectCards` and the
+  body is left unchanged — with a warning, not a non-zero exit, so it reads as
+  success. Use `gh api repos/{owner}/{repo}/pulls/{n} -X PATCH -F body=@file`
+  and confirm by reading the body back.
+- **A guard scoped to a convenient token refuses the whole machine.**
+  `tests-guard` treated any bare `-u` as a snapshot-update flag and so refused
+  `git push -u`, `git branch -u`, `cygpath -u` and `sort -u` — none of which can
+  reach a test. The flag only means anything to a test runner, and it belongs to
+  the command segment it sits in, not to the line: `npm test && git push -u`
+  must pass. This is the same shape as the earlier `sed -i` false positive, and
+  the same lesson — scope a guard to the hazard.
+- **The lock froze two things nobody approved and one nobody meant to.** Once
+  `.tests-locked` became tracked, every branch inherits it from main, and
+  `is_test_path` matched `*.test.*` anywhere. Two consequences, both hit within
+  an hour: no plan PR can introduce the test file it exists to propose, and no
+  hook suite under `.claude/hooks` can be edited — including the suite that
+  proves this guard works. The lock covers the *approved product list*, so:
+  `.claude/hooks/**` is excluded outright (integrity.sh governs it, and refuses
+  every tool call while it drifts, which is stricter), and a test file absent
+  from HEAD and from the index is a proposal, not a locked test. Everything the
+  guard cannot resolve to a repo-relative path stays refused.
+- **Git Bash rewrites a POSIX path passed as argv to a native binary.**
+  `node -e '…' /elsewhere/x.test.ts` arrives as
+  `C:/Program Files/Git/elsewhere/x.test.ts`. That is how a real defect surfaced:
+  `for p in $PATHS` splits on spaces, so the rewritten path became two
+  fragments, neither of which looked like a tracked test, and a locked test
+  under any directory with a space in its name was unprotected. Read paths one
+  per line — `while IFS= read -r p` over a heredoc, which keeps the loop in the
+  current shell so a refusal can still `exit 2`. Found by running the suite; the
+  code read fine.
