@@ -240,7 +240,13 @@ PATH_PAIRS_EOF
     # https://github.com/vitest-dev/vitest` ends in a basename that looks like
     # one.
     is_runner_token() {
-      case "$1" in *://*) return 1 ;; esac
+      # A URL is not a runner: `curl -u tok https://github.com/vitest-dev/vitest`
+      # ends in a basename that reads like one. Anchored on a LEADING scheme —
+      # matching `://` anywhere let `node file:///d/x/vitest -u` through, which
+      # is a real runner invocation wearing a scheme.
+      case "$1" in
+        http://*|https://*|git://*|ssh://*|ftp://*|git+ssh://*) return 1 ;;
+      esac
       base=${1##*/}
       case "$base" in
         vitest|jest|mocha|ava|tap|playwright|cypress|karma|nyc|c8) return 0 ;;
