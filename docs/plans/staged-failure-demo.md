@@ -130,7 +130,8 @@ form of "way back" that means anything under a fail-closed required check.
 
 **If a session dies between step 3 and step 6**, the operator holds a production
 server at `isReadyForChatgpt: false`. What they need, and what S3 must print
-before step 3 begins:
+before step 5 begins — the revert PR is opened at step 3, so its URL exists by
+then:
 
 > **YOUR ACTION (recovery):** merge the revert PR `<url>`, then confirm the
 > deploy at `https://manufact.com/cloud/.../deployments`. Its verdict is already
