@@ -47,3 +47,11 @@ PROGRESS.md
 
 # Test-list lock marker: created and removed by the human, never committed
 .tests-locked
+
+# Agent and evaluator scratch. The Stop hook commits whatever is uncommitted so
+# a session's work is recoverable, which once swept an evaluator's scratch
+# directory into a feature branch as a "wip: session backstop" commit. Scratch
+# belongs in the job temp directory; these patterns stop the ones that leak.
+.review-scratch/
+.scratch/
+*.scratch.*
