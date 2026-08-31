@@ -123,16 +123,19 @@ expect() {
   fi
 }
 
+# Pointed at an empty directory, the guard computes a marker path that does not
+# exist and exits 0 at its first line — which is exactly the behaviour under
+# test. The repository's own marker is never moved, so there is no window in
+# which this repo is unlocked and nothing for the Stop hook to sweep.
 printf '=== UNLOCKED: guard is inert ===\n'
-[ "$MARKER_PREEXISTING" -eq 0 ] || : > /dev/null
-if [ "$MARKER_PREEXISTING" -eq 1 ]; then
-  mv "$MARKER" "$MARKER.testbak"
-fi
+CLAUDE_PROJECT_DIR=$UNLOCKED_DIR
 expect 0 "edit a test file while unlocked"   Edit file_path "src/audit.test.ts"
 expect 0 "snapshot update while unlocked"    Bash command "npx vitest -u"
+CLAUDE_PROJECT_DIR=$REPO_ROOT
 
+# From here the real marker is in force, as it already was before this suite
+# started. Nothing is written to it.
 printf '\n=== LOCKED: guard refuses ===\n'
-: > "$MARKER"
 # Every path here is tracked in HEAD. That is the point: the marker freezes the
 # list a human approved, and "approved" here means "already committed".
 expect 2 "edit a tracked test"               Edit file_path "tests/self-audit-green.test.ts"
