@@ -102,7 +102,11 @@ expect 0 "write a brand-new test file"       Write file_path "tests/not-yet-prop
 expect 0 "edit a hook suite"                 Edit file_path ".claude/hooks/tests-guard.test.sh"
 expect 0 "hook suite, absolute + backslash"  Edit file_path "$REPO_ROOT\\.claude\\hooks\\integrity.test.sh"
 # Fails closed: a path it cannot resolve to a repo-relative one is not "new".
+# Git Bash rewrites a POSIX argv path for node.exe, so this arrives as
+# "C:/Program Files/Git/elsewhere/mystery.test.ts" — which is also the case
+# that caught the guard splitting one path into two on the space.
 expect 2 "unresolvable absolute test path"   Edit file_path "/elsewhere/mystery.test.ts"
+expect 2 "spaced path ending in a test file" Edit file_path "/some dir/tests/x.test.ts"
 expect 2 "path escaping the repo"            Edit file_path "../outside/other.test.ts"
 
 printf '\n=== LOCKED: non-test work still flows ===\n'
