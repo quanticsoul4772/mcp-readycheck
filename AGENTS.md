@@ -164,12 +164,31 @@ lint or a hook.
   Neither absence meant approval; both meant the gate had not been reached. If
   the thing that would have said no is missing, that is the stop condition.
 - **A PR merged before the verdict defeats Gate B entirely.** PR #8 was merged
-  while the Stage 4 evaluator was still running; it returned BLOCK six minutes
-  later and three defects were already live — a failed audit that discarded its
-  own cause, a tool the model could not call, and a `readOnlyHint: true` on a
-  handler that POSTs. `verdict.yml` now makes an approving verdict a required
-  check, failing closed on a missing, malformed or BLOCK verdict, with `[plan]`
-  and `[docs]` title prefixes exempt.
+  at 23:47:38Z while the Stage 4 evaluator was still running; the BLOCK arrived
+  at 23:48:50Z, **72 seconds later**, and three defects were already live — a
+  failed audit that discarded its own cause, a tool the model could not call,
+  and a `readOnlyHint: true` on a handler that POSTs. The margin was seconds,
+  not minutes: waiting would have cost almost nothing.
+  `.github/workflows/verdict.yml` fails a PR whose body carries no approving
+  verdict naming the head commit, with `[plan]`/`[docs]` titles exempt only
+  when the diff is documentation-only. **It is not yet in ruleset `21871580`'s
+  required checks** — until it is, a red `verdict` is advisory, and that gap is
+  itself the "absent guard read as an allowance" failure described above.
+- **A gate that can be satisfied by its own subject is not a gate.** The first
+  draft of `verdict.yml` could be passed three ways without an evaluator ever
+  seeing the merged code: a verdict bound to no commit (approve a one-liner,
+  then push anything), a `[docs]` title over a diff full of source, and a
+  verdict string the PR author wrote themselves. The first two are closed by
+  binding the verdict to the head SHA and by checking the file list rather than
+  the title. The third is not closed in code — the body is author-written — and
+  rests on a human clicking merge, which is the attention that failed on PR #8.
+  Treat the check as evidence that a verdict exists, never as evidence that it
+  is honest.
+- **A workflow triggered by `issue_comment` cannot gate a PR.** Such a run
+  executes with `GITHUB_SHA` set to the default branch, so its check attaches to
+  `main` and never appears in the PR's checks list. A verdict posted as a
+  comment can therefore never turn a required check green. Read the PR body,
+  which `pull_request: edited` re-evaluates against the PR head.
 - **Manufact env vars are injected at deploy time only.** Setting or changing
   one does nothing to a running deployment. `MANUFACT_API_KEY` was created at
   00:29:02Z while the active deployment had finished building at 00:22:29Z, so

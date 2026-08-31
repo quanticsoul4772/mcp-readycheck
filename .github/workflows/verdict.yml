@@ -1,94 +1,111 @@
 name: Verdict
 
-# Gate B was defeated once: a PR was merged before its evaluator verdict
-# arrived, and three defects reached production. This check makes the verdict a
-# precondition of merging rather than a courtesy.
+# Gate B was defeated once: PR #8 was merged while its evaluator was still
+# running, and three defects reached production. This check makes an approving
+# verdict a precondition of merging rather than a courtesy.
 #
-# It fails closed. A missing verdict, an unparseable one, or a BLOCK all fail —
-# an absent guard is a stop, not an allowance.
+# It fails closed. A missing verdict, a malformed one, a BLOCK, or a verdict
+# that does not name the commit being merged all fail — an absent guard is a
+# stop, not an allowance.
+#
+# Three properties the first draft lacked, each found by an adversarial
+# evaluation of this very workflow:
+#
+#   1. The verdict is read from the PR body only. A run triggered by
+#      issue_comment executes with GITHUB_SHA set to the default branch, so its
+#      check attaches to main and never appears in the PR's checks — a verdict
+#      in a comment could never turn this green. Editing the body fires
+#      `pull_request: edited`, which does attach to the PR head.
+#   2. The verdict must name the head SHA. Otherwise an approval for commit A
+#      silently covers commit B pushed after it, which is the original failure
+#      reached through a different door.
+#   3. The [plan]/[docs] exemption is checked against the actual file list, not
+#      the title alone. A title is chosen by exactly the actor this gate
+#      constrains.
 
 on:
   pull_request:
-    types: [opened, edited, reopened, synchronize]
+    types: [opened, edited, reopened, synchronize, ready_for_review]
     branches: [main]
-  issue_comment:
-    types: [created, edited]
+  merge_group:
 
 permissions:
   contents: read
   pull-requests: read
 
 concurrency:
-  group: verdict-${{ github.workflow }}-${{ github.event.pull_request.number || github.event.issue.number }}
+  group: verdict-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   verdict:
     name: verdict
-    # issue_comment fires for issues too; only run it for pull requests.
-    if: github.event_name == 'pull_request' || github.event.issue.pull_request
     runs-on: ubuntu-latest
     steps:
       - name: Check for an approving evaluator verdict
+        if: github.event_name == 'pull_request'
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
         with:
           script: |
-            const number =
-              context.payload.pull_request?.number ?? context.payload.issue?.number;
+            const pr = context.payload.pull_request;
+            const headSha = pr.head.sha;
+            const shortSha = headSha.slice(0, 7);
 
-            const { data: pr } = await github.rest.pulls.get({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              pull_number: number,
-            });
-
-            // Plan-only and docs PRs carry no implementation to evaluate.
+            // --- exemption -------------------------------------------------
+            // Both halves must hold: the declared intent AND the actual diff.
             const title = pr.title ?? '';
-            if (/^\s*\[(plan|docs)\]/i.test(title)) {
-              core.info(`Exempt: title carries a plan/docs prefix — "${title}"`);
-              return;
-            }
+            const claimsExempt = /^\s*\[(plan|docs)\]/i.test(title);
 
-            // A verdict is an approving one only if it says so explicitly.
-            // Anything else — BLOCK, absent, malformed — fails.
-            const APPROVING = /"verdict"\s*:\s*"(APPROVE|APPROVE-WITH-NOTES)"/;
-            const ANY_VERDICT = /"verdict"\s*:\s*"([A-Z-]+)"/g;
+            if (claimsExempt) {
+              const files = await github.paginate(github.rest.pulls.listFiles, {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: pr.number,
+                per_page: 100,
+              });
+              const isDoc = (f) => f.filename.endsWith('.md') || f.filename.startsWith('docs/');
+              const code = files.filter((f) => !isDoc(f)).map((f) => f.filename);
 
-            const describe = (text) => {
-              const found = [...String(text ?? '').matchAll(ANY_VERDICT)].map((m) => m[1]);
-              return found.length ? found.join(', ') : 'none';
-            };
-
-            // The body is checked first because it is free to read; comments
-            // need an API call. A verdict in either place counts.
-            if (APPROVING.test(pr.body ?? '')) {
-              core.info('Approving verdict found in the PR body.');
-              return;
-            }
-
-            const comments = await github.paginate(github.rest.issues.listComments, {
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: number,
-              per_page: 100,
-            });
-
-            for (const comment of comments) {
-              if (APPROVING.test(comment.body ?? '')) {
-                core.info(`Approving verdict found in comment ${comment.id}.`);
+              if (code.length === 0) {
+                core.info(`Exempt: ${files.length} file(s), all documentation.`);
                 return;
               }
+              core.setFailed(
+                'This PR claims a [plan]/[docs] exemption but changes files that are ' +
+                  'neither documentation nor plans, so it needs an evaluator verdict:\n  ' +
+                  code.join('\n  '),
+              );
+              return;
             }
 
-            const seen = [
-              `body: ${describe(pr.body)}`,
-              ...comments.map((c) => `comment ${c.id}: ${describe(c.body)}`),
-            ].join('\n  ');
+            // --- the verdict -----------------------------------------------
+            const body = pr.body ?? '';
+            const APPROVING = /"verdict"\s*:\s*"(APPROVE|APPROVE-WITH-NOTES)"/;
+            const ANY_VERDICT = /"verdict"\s*:\s*"([A-Za-z-]+)"/g;
 
-            core.setFailed(
-              'No approving evaluator verdict on this PR.\n' +
-                'Gate B needs a JSON block containing "verdict": "APPROVE" or\n' +
-                '"APPROVE-WITH-NOTES" in the PR body or a comment. Plan and docs PRs\n' +
-                'are exempt via a [plan] or [docs] title prefix.\n' +
-                `Verdicts seen:\n  ${seen}`,
-            );
+            const seen = [...body.matchAll(ANY_VERDICT)].map((m) => m[1]);
+            const describe = seen.length ? seen.join(', ') : 'none';
+
+            if (!APPROVING.test(body)) {
+              core.setFailed(
+                'No approving evaluator verdict in the PR body.\n' +
+                  'Gate B needs a JSON block containing "verdict": "APPROVE" or\n' +
+                  '"APPROVE-WITH-NOTES", and it must name the commit it evaluated.\n' +
+                  '[plan] and [docs] titles are exempt only when the diff is docs-only.\n' +
+                  `Verdicts found in body: ${describe}`,
+              );
+              return;
+            }
+
+            // The verdict must name the commit it judged, so that pushing after
+            // an approval invalidates it rather than inheriting it.
+            if (!body.includes(shortSha) && !body.includes(headSha)) {
+              core.setFailed(
+                `The verdict in the body does not name the head commit ${shortSha}.\n` +
+                  'An approval given for an earlier commit does not carry forward.\n' +
+                  'Re-run the evaluator against this commit and record its SHA in the verdict.',
+              );
+              return;
+            }
+
+            core.info(`Approving verdict found, naming head commit ${shortSha}.`);
