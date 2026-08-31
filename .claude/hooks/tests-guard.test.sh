@@ -47,11 +47,19 @@ fi
 # previous run left its backup behind, rather than overwriting it.
 if [ -f "$MARKER.testbak" ]; then
   printf 'A previous run left %s behind.\n' "$MARKER.testbak" >&2
-  # Not `mv`: the guard refuses `mv` beside a `.tests-locked` token, so the
-  # obvious instruction is one the reader cannot follow in the state that
-  # prints it.
-  printf 'Restore it first: git checkout -- .tests-locked\n' >&2
-  printf 'Then remove the stale backup: %s\n' "$MARKER.testbak" >&2
+  # Printing an instruction the reader cannot follow took three tries, because
+  # two different hooks refuse different repairs and each fix moved which one
+  # objected. Measured with the marker present, which is the state that prints
+  # this:
+  #   mv  .tests-locked.testbak .tests-locked   → tests-guard refuses
+  #   git checkout -- .tests-locked             → destructive-guard refuses
+  #   git restore .tests-locked                 → destructive-guard refuses
+  #   git cat-file blob HEAD:… > .tests-locked  → tests-guard refuses
+  #   cp  .tests-locked.testbak .tests-locked   → both allow
+  # The `cp` is also the correct repair: it overwrites the 0-byte fake with the
+  # real content.
+  printf 'Restore it first: cp "%s" "%s"\n' "$MARKER.testbak" "$MARKER" >&2
+  printf 'Then: rm -f "%s"\n' "$MARKER.testbak" >&2
   exit 1
 fi
 
