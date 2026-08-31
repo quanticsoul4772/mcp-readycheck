@@ -29,7 +29,7 @@ marked below as unexercised with that history in mind.
 |---|---|---|---|
 | 1 | Valid `APPROVE` naming the head commit | **pass** | **Yes** — PR #13 (`406b9ce`), PR #16 (`4cdf982`), PR #21 (`437f6ad`), PR #22 (`353cc9f`) |
 | 2 | Valid `APPROVE-WITH-NOTES` naming the head commit | **pass** | **Yes** — PR #14 (`c14d255`), PR #19 (`fc331a1`), PR #20 (`b05843a`) |
-| 3 | `BLOCK` verdict naming the head commit | **fail** | **Still no.** Six more BLOCKs arrived during G3 (guard rounds 1, 2, 5, 6, 8, 9) and every one was acted on before the body was updated, so no BLOCK body has ever reached the workflow. Verified only by executing the extracted script against a constructed body. |
+| 3 | `BLOCK` verdict naming the head commit | **fail** | **Yes** — PR #24, head `94bc7a5`. [Run 33433398881](https://github.com/quanticsoul4772/mcp-readycheck/actions/runs/33433398881/job/99623948917) failed with `The evaluator's verdict for 94bc7a5 is BLOCK.` and `mergeStateStatus: BLOCKED`. See the note below on how it was staged. |
 | 4 | No verdict anywhere in the body | **fail** | **Yes** — PR #10 on its own first run, `body: none`; PR #16 before its verdict landed; PR #19 and PR #20, both opened before their evaluator returned |
 | 5 | `[plan]` title, documentation-only diff | **pass, exempt** | **Still no.** Every `[plan]` PR has carried tests, including PR #19. A plan PR without tests may not be a real shape in this workflow — the plan and its Default-FAIL suite ship together by design. |
 | 6 | `[docs]` title, documentation-only diff | **pass, exempt** | **Yes** — PR #15, PR #17, PR #23. Passes with no evaluator round. |
@@ -44,6 +44,36 @@ marked below as unexercised with that history in mind.
 | `evaluated_commit` empty string or one character | **fail** | **No** — script-level only. `headSha.startsWith("")` is `true` in JavaScript, which is why the value must match `/^[0-9a-f]{7,40}$/` before comparison |
 | Rename of a non-doc file onto a `docs/**.md` path under a `[docs]` title | **fail** | **No** — script-level only. `pulls.listFiles` reports only the destination, so `previous_filename` is checked too |
 | `merge_group` event | **n/a** | **No merge queue exists.** The trigger is deliberately absent: gating a step on the event type made a merge-group run report success having evaluated nothing. Without the trigger a queue stalls, which is a stop |
+
+## How case 3 was exercised
+
+It stayed unexercised for a structural reason, not an oversight: a BLOCK is
+acted on, and the fix lands before anyone edits the PR body, so a blocking
+verdict never survives long enough to reach the workflow. Six BLOCKs during G3's
+guard work all went that way. The gate had been observed passing many times and
+refusing never — which is the "absent guard read as an allowance" shape this
+repository has already been bitten by twice.
+
+So it was staged deliberately, under these conditions:
+
+- A **throwaway branch** with a single file that documented its own
+  disposability, and no `[plan]`/`[docs]` prefix, so no exemption was claimed
+  and the verdict path was the one under test.
+- A **fabricated** verdict block, naming the throwaway head SHA, with
+  **FABRICATED FOR GATE TEST** in the PR title and as the first line of the
+  body. No evaluator produced it and nothing was merged on its strength.
+- The PR was **closed unmerged** as soon as the check reported, the branch
+  deleted, and the throwaway file went with it.
+
+The check failed on the intended branch — the decisive-blocking-verdict path
+that refuses a current BLOCK whatever else the body carries — not on some
+incidental error. That distinction is why the log line is quoted above rather
+than just the conclusion.
+
+**What this does not prove.** The gate refuses a `BLOCK` that is present in the
+body. It cannot detect one that was never written there, which is the same limit
+recorded at the bottom of this file: the body is author-written, so the gate is
+evidence that a verdict exists, never that it is honest.
 
 ## Operating the gate
 
