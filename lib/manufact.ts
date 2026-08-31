@@ -92,6 +92,54 @@ export class MissingApiKeyError extends Error {
 }
 
 /**
+ * Rewrites a thrown error into text a caller can act on.
+ *
+ * The audit's fuzz check reads a tool's error output and objects when it hands
+ * back an internal identifier instead of a remedy. `ManufactApiError` carries
+ * the request path and the status code precisely so this repo can log and
+ * reason about them — neither belongs in a message the model reads, and the
+ * path can carry a query string.
+ *
+ * Nothing is swallowed: the caller still returns `isError: true`, and the
+ * original error object is unchanged for anything that inspects it.
+ */
+export function humanError(error: unknown): string {
+  // Already caller-facing guidance about an operator action, and the only
+  // actionable thing it says is the variable name. Rewriting it loses that.
+  if (error instanceof MissingApiKeyError) return error.message;
+
+  if (error instanceof ManufactApiError) {
+    if (error.status === 404) {
+      return (
+        "Manufact has no record matching those ids. Check the serverId, and the " +
+        "auditId if you passed one, then try again."
+      );
+    }
+    if (error.status === 401 || error.status === 403) {
+      return (
+        "Manufact refused the request as unauthorised. Check that this server's " +
+        "MANUFACT_API_KEY is set and still valid, then try again."
+      );
+    }
+    if (error.status === 429) {
+      return "Manufact is rate-limiting this server. Try again in a moment.";
+    }
+    if (error.status >= 500) {
+      return "Manufact's API failed to answer. Try again in a moment.";
+    }
+    return (
+      "Manufact refused the request. Check the ids you passed and try again."
+    );
+  }
+
+  // Errors this repo raises are written to be read; anything else is passed
+  // through rather than replaced, because inventing a message for an error we
+  // do not recognise would hide it.
+  if (error instanceof Error) return error.message;
+  return String(error);
+}
+
+/**
  * Returns the API key, or throws before any network call happens.
  *
  * Called first inside {@link manufactFetch}, which is what makes "fails closed
