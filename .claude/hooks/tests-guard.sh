@@ -291,11 +291,9 @@ PATH_PAIRS_EOF
       prev=""
       while IFS= read -r t; do
         [ -z "$t" ] && continue
-        # Folded, like the paths, the marker and the scheme. `npx VITEST -u` and
-        # `npx vitest --UPDATE-SNAPSHOT` name the same binary and the same flag
-        # on this filesystem; the runner and flag lists were the last two
-        # comparisons that still cared about case.
-        t=$(lower "$t")
+        # Tokens arrive folded — like the paths, the marker and the scheme.
+        # `npx VITEST -u` and `npx vitest --UPDATE-SNAPSHOT` name the same
+        # binary and the same flag on this filesystem.
         if [ "$runner" -eq 1 ] && is_update_flag "$t"; then
           block "snapshot-update flag on a test runner while tests are locked" "$CMD"
         fi
