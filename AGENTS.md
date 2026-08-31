@@ -362,12 +362,30 @@ lint or a hook.
   node npm test` and `curl -u tok https://github.com/vitest-dev/vitest` both
   carry a `-u` and a token whose basename reads as a runner. Requiring the flag
   to *follow* the runner separates them, and a URL is never a runner.
-- **Two gaps remain in the runner allow-list, and they are gaps, not
-  oversights.** `X=vitest; $X -u` and `echo -u | xargs npx vitest` need
-  dataflow, not pattern matching. Closing the first by expanding every token on
-  whitespace refuses `git commit -m "ran vitest -u earlier"`, which is the
-  false-positive class this repo has already paid for twice. The lock exists to
-  make an edit visible, not impossible.
+- **Simplifications in a guard become its gaps; count them before claiming a
+  number.** Two rounds in a row this file said "two gaps remain" and was wrong
+  both times, because each round's fix introduced or left one that the previous
+  count did not know about. What is actually uncovered, as of round 3:
+  `X=vitest; $X -u` and `echo -u | xargs npx vitest` need dataflow rather than
+  pattern matching, and a `-c` argument containing a newline defeats the
+  per-line segmenter (quote state does not carry across lines, so the tokenizer
+  falls back and the flag survives glued to a quote). Closed since: `bash -lc`
+  and `sh -euc` (a short-flag cluster ending in `c` is `-c`), and
+  `node file:///d/x/vitest -u` (matching `://` anywhere excluded a real runner
+  wearing a scheme; anchor on a leading scheme instead). Do not write a count
+  into this file — write the list, and let it grow.
+- **A verb enumeration is only as complete as the last person's shell.** The
+  marker check refuses `rm`, `unlink`, `mv`, `truncate`, `git clean`, and now
+  `shred` and `-delete`, because `shred -u .tests-locked` and `find . -name
+  .tests-locked -delete` both unlink it and both switch the entire guard off.
+  This repo's `destructive-guard.sh` covers neither, and the refusals seen
+  interactively for them come from an out-of-repo machine-level guard this file
+  already says not to rely on. The enumeration is not a closed set; treat a new
+  verb as expected, not as a surprise.
+- **The Bash-side write check only sees `>`.** `tee`, `cp /dev/null`, and
+  `sed -i` onto a locked test are not refused, and the redirect pattern matches
+  `.test.`/`.spec.` but not `.snap`. Known and unclosed — recorded so the next
+  reader does not mistake the guard for complete.
 - **Git Bash rewrites a POSIX path passed as argv to a native binary.**
   `node -e '…' /elsewhere/x.test.ts` arrives as
   `C:/Program Files/Git/elsewhere/x.test.ts`. That is how a real defect surfaced:
