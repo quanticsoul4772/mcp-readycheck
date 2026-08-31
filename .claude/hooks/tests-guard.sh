@@ -319,14 +319,28 @@ SEGMENTS_EOF
     # editable. Refused by the same guard the marker switches on.
     TOKENS=$(printf '%s\n' "$CMD" | xargs -n1 printf '%s\n' 2>/dev/null) || TOKENS=""
     [ -z "$TOKENS" ] && TOKENS=$(printf '%s\n' "$CMD" | tr ' \t' '\n\n')
+    # Whether any token IS a removal verb, rather than whether the command
+    # CONTAINS one followed by a space. `echo .tests-locked | xargs rm` deleted
+    # the marker and was allowed, because every pattern here ended in `\ *` and
+    # the verb was the last word on the line. A token test has no end-of-line
+    # blind spot, and it stops matching inside words as a bonus.
+    REMOVAL_VERB=0
+    for t in $TOKENS; do
+      tl=$(lower "$t")
+      case "${tl##*/}" in
+        rm|rmdir|unlink|del|erase|mv|shred|truncate) REMOVAL_VERB=1 ;;
+      esac
+    done
+    case "$(lower "$CMD")" in
+      *"git clean"*) REMOVAL_VERB=1 ;;
+    esac
+
     for t in $TOKENS; do
       case "$(lower "$t")" in
         *.tests-locked)
-          case "$(lower "$CMD")" in
-            *rm\ *|*rm\	*|*unlink\ *|*del\ *|*erase\ *|*mv\ *|*"git clean"*|*truncate\ *|*shred\ *)
-              block "removal or move of the lock marker" "$CMD"
-              ;;
-          esac
+          if [ "$REMOVAL_VERB" -eq 1 ]; then
+            block "removal or move of the lock marker" "$CMD"
+          fi
           # `-delete` only means deletion when something is walking the tree.
           # As a bare substring it refused `grep -n '-delete' .tests-locked`,
           # which is a read — the false-positive shape already in the mistake
