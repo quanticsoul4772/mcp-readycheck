@@ -372,11 +372,22 @@ lint or a hook.
   back and the flag survives glued to a quote); and a *nested* `-c`
   (`sh -c "sh -c 'vitest -u'"`) survives because the extraction goes one level
   only — single-line and balanced, so it is not the newline case above.
-  Closed since: `bash -lc`
+  Closed since: case on runner and flag names (`npx VITEST -u`, `--UPDATE-SNAPSHOT` —
+  the last two comparisons that still cared, after paths, the marker and the
+  scheme had all been folded), `bash -lc`
   and `sh -euc` (a short-flag cluster ending in `c` is `-c`), and
   `node file:///d/x/vitest -u` (matching `://` anywhere excluded a real runner
   wearing a scheme; anchor on a leading scheme instead). Do not write a count
   into this file — write the list, and let it grow.
+- **`*verb\ *` has an end-of-line blind spot.** Every pattern in the marker
+  check required a trailing space, so `echo .tests-locked | xargs rm` matched
+  none of them and deleted the marker — after which `[ -f "$MARKER" ] || exit 0`
+  fires on every later call and every locked test is editable by plain `Write`
+  for the rest of the session. `xargs rm -f` was refused, so the escape was
+  precisely "verb is the last word on the line". Test whether a **token** is the
+  verb, not whether the line contains it followed by a space; that also stops it
+  matching inside `confirm`. This was the listed rule failing on whitespace, not
+  the open-enumeration limit below — `rm` was in the list the whole time.
 - **A verb enumeration is only as complete as the last person's shell.** The
   marker check refuses `rm`, `unlink`, `mv`, `truncate`, `git clean`, and now
   `shred` and `-delete`, because `shred -u .tests-locked` and `find . -name
