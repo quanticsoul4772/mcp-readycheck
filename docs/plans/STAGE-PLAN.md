@@ -175,6 +175,61 @@ stages that follow.
     it — a broken refresh then displays as healthy progress. This shipped once
     and an evaluation caught it.
 
+## Corrections added by G3
+
+25. **The green baseline.** Audit `f4022c88` on deployment #44 (`41f910b`,
+    the merge of PR #20) is the reference G4 stages failures against:
+    `isReadyForChatgpt: true`, `isReadyForClaudeai: true`, 32 checks, 31 pass.
+    Diffed against baseline `523f56dc` by `checkId`: `tool-hints-present`,
+    `fuzz-edge-case-handling`, `tool-invocation-metadata-present` and
+    `view-domain-present` all moved fail → pass, 28 unchanged, **zero
+    regressions**.
+26. **One check remains red, and it is an SDK gap, not a repo defect.**
+    `tool-resource-metadata-complete` (warning) reports "1 resource(s) have
+    incomplete metadata" — down from 2, because removing the scaffold view took
+    one with it. The check wants a widget description.
+    `buildResourceUiMeta` in mcp-use 2.3.3 emits exactly `csp`, `permissions`,
+    `domain`, `prefersBorder`, and `widgetMetadata` and `widgetDescription`
+    appear in **no file** of the package. There is no way to set it from this
+    repo. The plan pre-declared this as a residual before the work started,
+    which is why it did not turn into a workaround.
+27. **Severity gates readiness; warnings do not.** Both `error`-severity checks
+    now pass and both flags are true while a `warning` is still failing. That
+    confirms the hypothesis the plan recorded and refutes the assumption that
+    every check must be green for a platform to accept the app.
+28. **The audit's own hints can be wrong for your stack.** Two of the five
+    named a field mcp-use 2.3.3 does not have. Following them literally would
+    have set fields the framework ignores and produced two wrong fixes. Prove a
+    framework behaviour by executing against the installed version before the
+    plan asserts it — the SPIKE step earned its place.
+29. **A goal's failure count can be wrong; verify it before planning against
+    it.** G3 named "the seven named failures"; the live baseline had **five**.
+    The extra two came from adding tool counts *inside* two checks. AC1 as
+    written could not be satisfied, and the plan said so as a blocking question
+    rather than quietly retargeting.
+30. **`/mcp/inspector` is dev-only.** It 404s on the deployment. The hosted
+    Inspector at `inspector.manufact.com`, reached from the "Open in Inspector"
+    button on the `/mcp` landing page, is what renders a deployed view.
+31. **Evaluate before pushing, not after opening the PR.** `verdict` fails
+    closed, so a PR with no verdict in its body is red from the moment it
+    exists — which is what the operator saw on #18, #19 and #20, with the admin
+    bypass as their only lever. Commit, evaluate that commit, then push and
+    `gh pr create --body-file` with the verdict already in the body, in one
+    step. Do not push the branch early either: GitHub offers a "Compare & pull
+    request" banner on any pushed branch. The gate was never the problem.
+32. **A guard that has never been attacked has holes you have not met.** The
+    guard PR took seven evaluation rounds, five of them BLOCK. Every defect was
+    found by executing the guard; reading found none of them, and three were
+    introduced by a previous round's fix. Budget for that shape of work: a
+    change to a comparison rather than to a rule wants an old-vs-new side-by-side
+    on identical input.
+33. **Do not mutate the switch you are testing.** `tests-guard.test.sh` parked
+    the repository's real `.tests-locked` and wrote a fake over it. Three
+    incidents followed, and the third — the Stop hook committing the transient
+    state, twice, on two branches — cannot be fixed by a `trap`, because the
+    process that commits is not the process that dies. Remove the window rather
+    than guarding it.
+
 ## Invariants
 
 - Secrets never enter the repository.
