@@ -79,13 +79,15 @@ jobs:
 
               // listFiles caps at 3000 and paginate truncates silently, so a
               // huge diff must fail rather than exempt on an incomplete list.
+              // A claim that cannot be verified is simply not granted; the PR
+              // then needs a verdict like any other. Failing here would refuse
+              // a PR that has one.
               if (files.length >= 3000) {
-                core.setFailed(
+                core.info(
                   `Diff has ${files.length} files; the file list may be truncated, ` +
-                    'so a [plan]/[docs] exemption cannot be verified. Needs a verdict.',
+                    'so the exemption cannot be verified. Falling through to the verdict check.',
                 );
-                return;
-              }
+              } else {
 
               // A rename reports only its DESTINATION in `filename`, so
               // `git mv .github/workflows/verdict.yml docs/verdict.yml.md`
@@ -102,16 +104,21 @@ jobs:
                 .filter((f) => !isDoc(f))
                 .map((f) => (f.previous_filename ? `${f.previous_filename} -> ${f.filename}` : f.filename));
 
-              if (other.length === 0) {
-                core.info(`Exempt: ${files.length} file(s), all documentation.`);
-                return;
+                if (other.length === 0) {
+                  core.info(`Exempt: ${files.length} file(s), all documentation.`);
+                  return;
+                }
+                // The prefix is a request, not a grant. A diff that does not
+                // qualify falls through to the verdict check rather than being
+                // refused outright — the previous revision failed here saying
+                // "so it needs an evaluator verdict" and then never looked for
+                // one, so a [plan] PR carrying a valid verdict could not pass.
+                core.info(
+                  'Exemption claimed but the diff is not documentation-only, so a ' +
+                    'verdict is required. Non-documentation files:\n  ' +
+                    other.join('\n  '),
+                );
               }
-              core.setFailed(
-                'This PR claims a [plan]/[docs] exemption but changes files that are ' +
-                  'not documentation, so it needs an evaluator verdict:\n  ' +
-                  other.join('\n  '),
-              );
-              return;
             }
 
             // --- collect verdict objects from the body ----------------------
