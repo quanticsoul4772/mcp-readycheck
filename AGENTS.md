@@ -372,13 +372,37 @@ lint or a hook.
   back and the flag survives glued to a quote); and a *nested* `-c`
   (`sh -c "sh -c 'vitest -u'"`) survives because the extraction goes one level
   only — single-line and balanced, so it is not the newline case above.
-  Closed since: case on runner and flag names (`npx VITEST -u`, `--UPDATE-SNAPSHOT` —
-  the last two comparisons that still cared, after paths, the marker and the
-  scheme had all been folded), `bash -lc`
+  Closed since: case on runner and flag names, `bash -lc`
   and `sh -euc` (a short-flag cluster ending in `c` is `-c`), and
   `node file:///d/x/vitest -u` (matching `://` anywhere excluded a real runner
   wearing a scheme; anchor on a leading scheme instead). Do not write a count
   into this file — write the list, and let it grow.
+- **Fold the token and the pattern, or the pattern becomes dead code.** Folding
+  tokens before `is_update_flag` closed `npx VITEST -u` and simultaneously
+  opened `npx jest --updateSnapshot` — the pattern list still held the camelCase
+  literal, which a lowered token can never match. jest's documented long flag
+  went unrefused, and the only visible symptom was an unreachable branch in a
+  `case` nobody reads. An evaluation caught it by running the old guard and the
+  new one side by side on the same input, which is the technique to reach for
+  when a fix touches a comparison rather than a rule.
+- **A basename comparison has to survive the platform's extensions.**
+  `/usr/bin/rm.exe` exists on Git Bash and runs from it; comparing `${t##*/}`
+  against a bare `rm` let `rm.exe .tests-locked` delete the marker, and the
+  substring form it replaced never caught it either. Strip a trailing `.exe`.
+- **A suite that parks the guard's own switch must restore it on every exit
+  path.** `tests-guard.test.sh` moved the real `.tests-locked` aside, wrote a
+  fake over it, and restored at the end — with no `trap`. The guard's first line
+  is `[ -f "$MARKER" ] || exit 0`, so any interruption in that window left the
+  repository silently unlocked, every locked test editable by plain `Write`, and
+  no refusal printed. It happened during an evaluation: a run killed by a
+  timeout left ` D .tests-locked`, and the next run computed its "was there a
+  marker?" flag from the fake and clobbered the real backup. Recovery was
+  accidental. There is a `trap ... EXIT INT TERM HUP` now, it refuses to start
+  if a previous run's backup is still present, and it falls back to
+  `git checkout -- .tests-locked`. Verified by killing the suite mid-run.
+- **A guard runs on every tool call, so its cost is the session's cost.** A
+  `lower()` helper forking a subshell and a `tr` per token, inside a per-token
+  loop, cost about 1.8s on every Bash, Edit and Write. Fold the list once.
 - **`*verb\ *` has an end-of-line blind spot.** Every pattern in the marker
   check required a trailing space, so `echo .tests-locked | xargs rm` matched
   none of them and deleted the marker — after which `[ -f "$MARKER" ] || exit 0`
