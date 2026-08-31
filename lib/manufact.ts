@@ -141,15 +141,30 @@ export async function manufactFetch<T>(path: string, init?: RequestInit): Promis
 }
 
 /**
+ * The raw server record.
+ *
+ * `mcpUrl` is the API's own statement of where this server answers, which is
+ * what makes it a live oracle rather than a constant. `activeDeploymentId` is
+ * returned exactly as the API sends it, **including null** — this function
+ * does not throw. Use {@link resolveActiveDeploymentId} when you need a
+ * deployment id and want the null case refused.
+ */
+export async function fetchServer(serverId: string): Promise<{
+  activeDeploymentId: string | null;
+  mcpUrl: string;
+  status: string;
+}> {
+  return manufactFetch(`/api/v1/servers/${encodeURIComponent(serverId)}`);
+}
+
+/**
  * The server's currently active deployment.
  *
  * Throws when it is null: an audit with no deployment to point at is not a
  * thing worth creating, and a silent default would be a fallback.
  */
 export async function resolveActiveDeploymentId(serverId: string): Promise<string> {
-  const server = await manufactFetch<{ activeDeploymentId: string | null }>(
-    `/api/v1/servers/${encodeURIComponent(serverId)}`,
-  );
+  const server = await fetchServer(serverId);
 
   if (!server.activeDeploymentId) {
     throw new Error(

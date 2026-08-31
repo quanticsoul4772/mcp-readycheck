@@ -14,13 +14,16 @@
 import { strict as assert } from "node:assert";
 import { after, before, describe, it } from "node:test";
 
-// Explicit .ts specifiers: Node's type stripping resolves the path literally
-// and does not remap .js to .ts, so the .js form used inside src cannot resolve
-// here. tsc never sees this file — tests/ is outside the tsconfig include —
-// so the extension is a runtime concern only.
+// Library imports go through the `#lib/*` subpath map in package.json: one
+// specifier that both TypeScript NodeNext and Node's type stripping resolve.
+// A relative `./x.js` resolves literally under Node and finds nothing; `./x.ts`
+// fails typecheck with TS5097. `../index.ts` below is relative only because the
+// entry point has no subpath alias, and tsc never sees this file anyway —
+// tests/ sits outside the tsconfig include.
 import {
   createAudit,
   fetchAudit,
+  fetchServer,
   requireApiKey,
   resolveActiveDeploymentId,
 } from "#lib/manufact";
@@ -131,6 +134,23 @@ describe("AC2 — get_audit validates and preserves every category", () => {
     const result = await getAuditHandler({ serverId: SERVER_ID, auditId: createdAuditId });
     const out = result.structuredContent as { checks?: Array<{ category: string }> };
 
+    // Guard against a vacuous pass: with no checks on either side the deepEqual
+    // below compares [] with [] and proves nothing about preservation.
+    //
+    // The status is asserted separately so the diagnosis points at the right
+    // subsystem. The before() hook exits on `failed` as well as `completed`, so
+    // a 502 at the target endpoint would otherwise surface here as a complaint
+    // about mapping fidelity.
+    assert.equal(
+      raw.status,
+      "completed",
+      `the audit settled at "${raw.status}" — the audit run failed, not the mapping`,
+    );
+    assert.ok(
+      (raw.checks ?? []).length > 0,
+      "a completed audit must carry checks for this assertion to mean anything",
+    );
+
     const rawCategories = (raw.checks ?? []).map((c) => c.category).sort();
     const outCategories = (out.checks ?? []).map((c) => c.category).sort();
 
@@ -184,10 +204,41 @@ describe("AC3 — an unknown category survives", () => {
     const mapped = mapAuditResponse(payload);
     auditOutputSchema.parse(mapped);
 
+    assert.equal(mapped.targetUrl, `${MCP_ORIGIN}/mcp`, "targetUrl must survive the mapping");
     assert.equal(mapped.checks?.[0]?.category, unknown, "category must not be dropped or coerced");
     assert.equal(mapped.checks?.[0]?.severity, "whatever-severity");
     assert.deepEqual(mapped.checks?.[0]?.details, { nested: { count: 3 } });
     assert.equal(mapped.checks?.[0]?.hint, 42, "an untyped hint must not be stringified");
+  });
+});
+
+describe("a failed audit keeps the reason it failed", () => {
+  it("carries errorMessage through when the audit failed and produced no checks", () => {
+    // The state the suite never reached live: `failed`, with `checks` absent —
+    // which the spec permits, since checks is not in the required list. Before
+    // errorMessage was mapped, this returned a bare "it failed" with the cause
+    // the API had supplied thrown away.
+    const mapped = mapAuditResponse({
+      id: "aud_failed",
+      serverId: SERVER_ID,
+      deploymentId: null,
+      organizationId: "org_1",
+      targetUrl: `${MCP_ORIGIN}/mcp`,
+      gitBranch: null,
+      status: "failed",
+      durationMs: 900,
+      errorMessage: "target returned 502",
+      isReadyForChatgpt: null,
+      isReadyForClaudeai: null,
+      startedAt: "2026-08-30T00:00:00Z",
+      completedAt: "2026-08-30T00:00:01Z",
+      createdAt: "2026-08-30T00:00:00Z",
+    });
+
+    auditOutputSchema.parse(mapped);
+    assert.equal(mapped.status, "failed");
+    assert.equal(mapped.errorMessage, "target returned 502", "the cause must reach the caller");
+    assert.equal(mapped.checks, undefined, "absent checks stay absent, never coerced to []");
   });
 });
 
@@ -216,12 +267,24 @@ describe("AC4 — invalid ids surface as tool errors", () => {
 });
 
 describe("AC5 — the audit targets this server's own endpoint", () => {
-  it("T10 targetUrl equals MCP_URL + /mcp", async () => {
+  it("T10 targetUrl equals MCP_URL + /mcp and the server record's mcpUrl", async () => {
     const audit = await fetchAudit(SERVER_ID, createdAuditId);
+
+    // Derived from live data, not from a constant typed into this file: the
+    // server record is the API's own statement of where this server answers.
+    const server = await fetchServer(SERVER_ID);
+    assert.equal(
+      audit.targetUrl,
+      server.mcpUrl,
+      "the audit must target the endpoint the server record advertises",
+    );
+
     // MCP_URL is injected by the deploy pipeline as the origin, with no /mcp
-    // suffix. Locally it is absent, so the origin is stated explicitly; Stage 5
-    // demonstrates the same equality against the injected value.
+    // suffix. The constant is the documented origin and is asserted to agree
+    // with the live record, so a drifted deployment fails here rather than
+    // passing against a stale literal.
     const origin = process.env.MCP_URL ?? MCP_ORIGIN;
+    assert.equal(server.mcpUrl, `${origin}/mcp`);
     assert.equal(audit.targetUrl, `${origin}/mcp`);
   });
 });
@@ -261,8 +324,24 @@ describe("guards that hold across the suite", () => {
     assert.match(String(id), /^[0-9a-f-]{36}$/);
   });
 
-  it("createAudit is reachable directly", () => {
-    assert.equal(typeof createAudit, "function");
+  it("createAudit posts an audit bound to the deployment it is given", async () => {
+    const deploymentId = await resolveActiveDeploymentId(SERVER_ID);
+    const created = await createAudit(SERVER_ID, deploymentId);
+
+    assert.match(created.id, /^[0-9a-f-]{36}$/);
+    assert.ok(["pending", "running"].includes(created.status));
+
+    // The binding is the point of resolving the deployment at all: assert the
+    // audit actually carries it, rather than that the function exists.
+    //
+    // Known limit: the only deployment id available here is the active one, and
+    // the API binds that by itself when the body omits deploymentId. So this
+    // would still pass if createAudit sent `{}` — D2's rejected runner-up.
+    // Distinguishing the two needs a non-active deployment id, which this
+    // server does not have. Strictly stronger than the assertion it replaced,
+    // but not proof that the id was sent.
+    const audit = await fetchAudit(SERVER_ID, created.id);
+    assert.equal(audit.deploymentId, deploymentId);
   });
 });
 
