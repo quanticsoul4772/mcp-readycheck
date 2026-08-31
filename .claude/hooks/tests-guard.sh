@@ -253,6 +253,16 @@ PATH_PAIRS_EOF
       SEG_TOKENS=$(printf '%s\n' "$seg" | xargs -n1 printf '%s\n' 2>/dev/null) ||
         SEG_TOKENS=$(printf '%s\n' "$seg" | tr ' \t' '\n\n')
 
+      # `sh -c "vitest -u"` arrives as three tokens, the last of which is the
+      # whole inner command. Expand the argument of a `-c` so the words inside
+      # it are scanned too. Only after `-c`: splitting every token on
+      # whitespace would make `git commit -m "ran vitest -u"` a refusal, and a
+      # guard that refuses commit messages is the false-positive class this
+      # repo has already paid for twice.
+      SEG_TOKENS=$(printf '%s\n' "$SEG_TOKENS" | awk '
+        { if (prev == "-c") { n = split($0, w, /[ \t]+/); for (i = 1; i <= n; i++) if (w[i] != "") print w[i] }
+          print; prev = $0 }')
+
       runner=0
       prev=""
       while IFS= read -r t; do
