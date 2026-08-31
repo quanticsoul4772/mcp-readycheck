@@ -257,10 +257,15 @@ PATH_PAIRS_EOF
       return 1
     }
 
+    # Callers pass an already-lower-cased token, so every pattern here must be
+    # lower-case too. Folding the token while leaving `--updateSnapshot` in
+    # camelCase made that pattern unreachable and silently un-refused jest's
+    # documented long flag — a hole opened by the fix for a different one, and
+    # visible only as dead code in a `case` nobody reads.
     is_update_flag() {
       case "$1" in
-        -u|-U|--update-snapshot|--updateSnapshot|--update-snapshots|--ci=false) return 0 ;;
-        -u=*|-U=*|--update-snapshot=*|--updateSnapshot=*|--update-snapshots=*) return 0 ;;
+        -u|--update-snapshot|--updatesnapshot|--update-snapshots|--ci=false) return 0 ;;
+        -u=*|--update-snapshot=*|--updatesnapshot=*|--update-snapshots=*) return 0 ;;
       esac
       return 1
     }
