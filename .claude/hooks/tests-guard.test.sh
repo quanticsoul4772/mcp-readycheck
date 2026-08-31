@@ -235,6 +235,20 @@ expect 2 "upper-case runner"                 Bash command "npx VITEST -u"
 expect 2 "mixed-case runner"                 Bash command "npx Vitest -u"
 expect 2 "upper-case flag"                   Bash command "npx vitest --UPDATE-SNAPSHOT"
 expect 2 "upper-case npm test"               Bash command "npm TEST -- --update-snapshot"
+# Round 6: folding the token while leaving the pattern in camelCase made
+# `--updateSnapshot` — jest's documented long flag — unreachable, so the fix for
+# one case bug opened another. The absence of this assertion is what let it
+# through; every accepted spelling is pinned now.
+expect 2 "jest camelCase long flag"          Bash command "npx jest --updateSnapshot"
+expect 2 "jest camelCase with a value"       Bash command "npx jest --updateSnapshot=true"
+expect 2 "kebab long flag"                   Bash command "npx jest --update-snapshot"
+expect 2 "plural long flag"                  Bash command "npx vitest --update-snapshots"
+expect 2 "short upper flag"                  Bash command "npx vitest -U"
+expect 2 "ci=false"                          Bash command "npx vitest --ci=false"
+# `/usr/bin/rm.exe` exists on Git Bash and runs from it.
+expect 2 "rm.exe"                            Bash command "rm.exe .tests-locked"
+expect 2 "absolute rm.exe"                   Bash command "/usr/bin/rm.exe .tests-locked"
+expect 2 "mv.exe"                            Bash command "mv.exe .tests-locked /tmp/x"
 expect 2 "path escaping the repo"            Edit file_path "../outside/other.test.ts"
 
 printf '\n=== LOCKED: non-test work still flows ===\n'
