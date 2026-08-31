@@ -1,0 +1,205 @@
+/* audit-report view. Self-contained: no external fonts or assets, which is why
+   the tool declares no CSP block at all. */
+
+.ar {
+  font:
+    14px/1.5 ui-sans-serif,
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    sans-serif;
+  color: #1a1a1a;
+  padding: 16px;
+}
+
+.ar-title {
+  margin: 0 0 2px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.ar-target {
+  margin: 0 0 12px;
+  font-size: 12px;
+  color: #6b7280;
+  word-break: break-all;
+}
+
+.ar-note {
+  margin: 8px 0;
+  color: #6b7280;
+}
+
+.ar-error {
+  margin: 8px 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+/* --- readiness badges --- */
+
+.ar-badges {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.ar-badge {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  min-width: 92px;
+}
+
+.ar-badge__label {
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.ar-badge__value {
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.ar-badge--ready {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+.ar-badge--ready .ar-badge__value {
+  color: #166534;
+}
+
+.ar-badge--not-ready {
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+.ar-badge--not-ready .ar-badge__value {
+  color: #991b1b;
+}
+
+/* null renders as unknown and must not look like a failure */
+.ar-badge--unknown {
+  background: #f9fafb;
+}
+.ar-badge--unknown .ar-badge__value {
+  color: #6b7280;
+}
+
+/* --- status --- */
+
+.ar-status {
+  margin: 0 0 12px;
+  font-size: 12px;
+  text-transform: capitalize;
+  color: #6b7280;
+}
+
+.ar-status--failed {
+  color: #991b1b;
+}
+
+.ar-status--completed {
+  color: #166534;
+}
+
+/* --- grouped checks --- */
+
+.ar-group {
+  margin-bottom: 14px;
+}
+
+.ar-group__title {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #374151;
+}
+
+.ar-group__checks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ar-check {
+  display: grid;
+  grid-template-columns: 52px 1fr auto;
+  gap: 8px;
+  align-items: baseline;
+  padding: 6px 8px;
+  border-radius: 5px;
+  background: #f9fafb;
+}
+
+.ar-check__status {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #6b7280;
+}
+
+.ar-check--pass .ar-check__status {
+  color: #166534;
+}
+
+.ar-check--fail .ar-check__status {
+  color: #991b1b;
+}
+
+.ar-check__severity {
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.ar-check__message,
+.ar-check__hint {
+  grid-column: 2 / -1;
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: #4b5563;
+}
+
+.ar-check__hint {
+  color: #6b7280;
+  font-style: italic;
+}
+
+@media (prefers-color-scheme: dark) {
+  .ar {
+    color: #e5e7eb;
+  }
+  .ar-badge,
+  .ar-check {
+    background: #1f2937;
+    border-color: #374151;
+  }
+  .ar-group__title {
+    color: #d1d5db;
+  }
+  .ar-check__message {
+    color: #d1d5db;
+  }
+  .ar-badge--ready {
+    background: #052e16;
+    border-color: #166534;
+  }
+  .ar-badge--not-ready,
+  .ar-error {
+    background: #450a0a;
+    border-color: #991b1b;
+    color: #fecaca;
+  }
+  .ar-badge--unknown {
+    background: #111827;
+  }
+}
