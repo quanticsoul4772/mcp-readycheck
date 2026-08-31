@@ -367,9 +367,12 @@ lint or a hook.
   both times, because each round's fix introduced or left one that the previous
   count did not know about. What is actually uncovered, as of round 3:
   `X=vitest; $X -u` and `echo -u | xargs npx vitest` need dataflow rather than
-  pattern matching, and a `-c` argument containing a newline defeats the
-  per-line segmenter (quote state does not carry across lines, so the tokenizer
-  falls back and the flag survives glued to a quote). Closed since: `bash -lc`
+  pattern matching; a `-c` argument containing a newline defeats the per-line
+  segmenter (quote state does not carry across lines, so the tokenizer falls
+  back and the flag survives glued to a quote); and a *nested* `-c`
+  (`sh -c "sh -c 'vitest -u'"`) survives because the extraction goes one level
+  only — single-line and balanced, so it is not the newline case above.
+  Closed since: `bash -lc`
   and `sh -euc` (a short-flag cluster ending in `c` is `-c`), and
   `node file:///d/x/vitest -u` (matching `://` anywhere excluded a real runner
   wearing a scheme; anchor on a leading scheme instead). Do not write a count
