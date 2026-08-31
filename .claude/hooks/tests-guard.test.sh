@@ -16,8 +16,21 @@ export CLAUDE_PROJECT_DIR
 
 PASS=0
 FAIL=0
+# "Should this repository be locked?" is answered by git, not by whether a
+# previous run happened to leave the file lying around. Reading it from the
+# filesystem is what deleted the marker for real: a run that started while the
+# marker was already absent recorded MARKER_PREEXISTING=0, and its teardown then
+# removed the marker it had written — leaving no marker and no backup, which is
+# indistinguishable from "there was never a lock". Git knows the difference.
 MARKER_PREEXISTING=0
-[ -f "$MARKER" ] && MARKER_PREEXISTING=1
+if [ -f "$MARKER" ]; then
+  MARKER_PREEXISTING=1
+elif git -C "$REPO_ROOT" cat-file -e HEAD:.tests-locked 2>/dev/null; then
+  MARKER_PREEXISTING=1
+  printf 'The lock marker was missing at start; HEAD says it should exist.\n' >&2
+  printf 'Restoring it before the suite runs.\n' >&2
+  git -C "$REPO_ROOT" checkout -- .tests-locked 2>/dev/null || :
+fi
 
 # This suite parks the real marker, writes a fake over it, and restores at the
 # end. Between those two points the repository has no lock: the guard's very
