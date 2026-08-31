@@ -88,6 +88,31 @@ might not fail, or it might fail without moving the flag.
 It failed and moved the flag, exactly as predicted. The inference was right. It
 was still an inference when it was made, and the record says so.
 
+### And the demo turned the inference into a measurement
+
+The red capture's `details` field, which nobody in this project had read:
+
+```json
+{"label": "get_audit.annotations.openWorldHint",
+ "value": "cannot be true when readOnlyHint is true because reads do not change external state"}
+```
+
+**The audit names the tool, the field, and the reason.** That corrects a belief
+this project has been carrying since G3, whose plan states in as many words:
+
+> The audit does not name which tool trips `tool-hints-present` … the tool is
+> inferred, not named by the audit.
+
+That was wrong, and the reason it was wrong is instructive. `details` is
+`anyOf: [{}, null]` in the OpenAPI document — untyped — and G3 correctly refused
+to assume it was a string. But refusing to assume its *type* turned into never
+reading its *contents*, and the attribution sat there unread through an entire
+goal spent inferring what it stated outright. The G3 hypothesis about which tool
+was at fault happened to be correct; it need never have been a hypothesis.
+
+So the demo produced a finding beyond its own acceptance criteria: read
+`details`, not just `message`.
+
 ## `tool-resource-metadata-complete` is untouched, deliberately
 
 That check fails in all three audits — baseline, red, and green — identically:
@@ -107,14 +132,29 @@ been the wrong break.
 `screenshot-green-view.jpg` — the `audit-report` view rendering a green audit in
 the hosted Inspector at `inspector.manufact.com`, both badges reading Ready.
 
-**There is no red screenshot, and that is a real gap in this record.** The revert
-merged and deployed while the red capture was being taken, so by the time the
-Inspector rendered, production was green again. Re-staging the break to obtain a
-screenshot would put the production server back into a false-advertising state
-for a cosmetic asset, which is not a trade worth making. The red evidence is
-`audit-red.json`, taken from the live deployment through the deployed tools while
-the break was active — the same source, in the machine-readable form the tests
-actually check.
+**There is no red screenshot, and that is a real gap in this record.** The exact
+timing, since the first draft of this sentence was loose about it:
+
+| UTC | |
+|---|---|
+| 21:22:43 | PR #27 merged |
+| 21:24:01 | break deployment `918b87d3` live — **production goes red** |
+| 21:25:16 | PR #28 merged |
+| 21:26:10–13 | red audit `5309c70b` captured, against `918b87d3` |
+| 21:26:33 | revert deployment `c57e6a1b` live — **production green again** |
+| 21:28:49–51 | green audit `a8c78006` captured |
+
+Production was red for **about two and a half minutes**, and it closed 20 seconds
+after the red capture finished — while the Inspector was still being driven. So
+the view rendered green.
+
+Re-staging the break to obtain a screenshot would put the production server back
+into a false-advertising state for a cosmetic asset. No acceptance criterion
+requires a screenshot; the plan's D3 named them as the human-legible half, not as
+evidence. The red evidence is `audit-red.json`, taken from the live deployment
+through the deployed tools while the break was active, and the audit's own
+`deploymentId` field records that it ran against `918b87d3` — which is
+independent of anything this repository asserts.
 
 Note also that `/mcp/inspector` is dev-only and 404s on the deployment; the
 hosted Inspector reached from the `/mcp` landing page is what renders a deployed
