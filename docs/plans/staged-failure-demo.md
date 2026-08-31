@@ -65,10 +65,26 @@ error/`["chatgpt"]` checks were failing at once. A single one failing alone has
 never been seen on this server.
 
 So AC1's red state is a prediction with two ways to be wrong: the check might
-not fail (Q1), or it might fail without moving the flag (this question). Both
-land in the same place — S3 records what actually happened, the revert ships,
-and the plan is corrected. Expected red state: `isReadyForChatgpt: false`,
-`isReadyForClaudeai: true`, since the check carries `platforms: ["chatgpt"]`.
+not fail (Q1), or it might fail without moving the flag (this question). Expected
+red state: `isReadyForChatgpt: false`, `isReadyForClaudeai: true`, since the
+check carries `platforms: ["chatgpt"]`.
+
+**What happens if either prediction is wrong**, and why it needs a human. By the
+time S3 measures, this test file is merged at Gate A and therefore tracked and
+locked — so T2 asserts a red state no agent can then revise. The same exposure
+sits on T3 and T4 if Manufact's check set moves off 32 checks / 31 pass between
+`f4022c88` and the green capture. The revert ships first regardless (Q5), and
+then:
+
+> **YOUR ACTION (if the red audit does not match T2):** the staged break did not
+> produce the predicted state, so T2 is asserting something untrue and no agent
+> may edit it while `.tests-locked` is in force. Remove the marker, or edit
+> `tests/staged-failure-demo.test.ts` yourself to match what the audit actually
+> reported, then restore the marker. The measurement is a finding worth keeping —
+> it would be the first direct evidence of how this check attributes.
+
+Recording the measurement and correcting the test are separate acts, and only the
+second needs you.
 
 ### Q4 — carried. The break must not disturb the SDK-gap check.
 
@@ -94,11 +110,20 @@ pushing:
 1. Author the break commit **and** its `git revert` commit locally, on separate
    branches, before anything is pushed.
 2. Get an evaluator verdict for **both**, naming both head SHAs.
-3. Open the break PR with its verdict in the body. Merge at Gate B. Deploy.
-4. Capture red.
-5. Open the revert PR with its already-obtained verdict in the body — green on
-   its first check run. Merge at Gate B. Deploy.
-6. Capture green.
+3. Push both branches and open **both** PRs, each carrying its verdict, each
+   green on its first check run. The revert PR is open and mergeable **before**
+   the break is merged.
+4. Post the recovery line below, naming the revert PR's real URL.
+5. Merge the break at Gate B. Deploy. Capture red.
+6. Merge the revert at Gate B. Deploy. Capture green.
+
+An earlier draft of this list opened the revert PR *after* the red capture, which
+contradicted the recovery paragraph below it and was caught in evaluation.
+Followed literally, a session dying between the break's merge and that step would
+leave production at `isReadyForChatgpt: false` with the evaluated revert commit
+unpushed on one machine — the way back existing only in a place nobody else can
+reach. The revert PR is open before the break merges, or the break does not
+merge.
 
 The revert is therefore *mergeable the moment it is opened*, which is the only
 form of "way back" that means anything under a fail-closed required check.
@@ -224,8 +249,14 @@ in its launch prompt:
 > whether the change is desirable. Judge only: (a) the diff is exactly the one
 > line named in D1 and nothing else; (b) `git revert` of it restores the parent
 > tree byte-for-byte; (c) no test file is modified; (d) nothing under `.claude/`
-> is touched; (e) the revert PR exists, carries its own approving verdict, and is
-> mergeable. Approve if all five hold.
+> is touched; (e) a `git revert` commit of it exists locally, is included in this
+> evaluation, and is being approved in the same pass. Approve if all five hold.
+
+Point (e) is phrased against the *commit*, not against a pull request. An earlier
+draft asked the evaluator to confirm "the revert PR exists … and is mergeable",
+which is unverifiable at the moment the criterion is applied: correction 31
+requires the evaluation to precede any push, so no PR exists yet. What can be
+checked then is that the revert commit exists and is in scope.
 
 Without that scoping, the gate that protects the repo would block the demo of
 the gate protecting the repo.
