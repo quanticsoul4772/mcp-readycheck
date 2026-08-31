@@ -250,6 +250,34 @@ lint or a hook.
   `POST /api/v1/deployments {serverId, branch: "main", trigger: "redeploy"}`.
   The same applies to flipping `sensitive` — that re-creates the variable, so it
   too needs a redeploy.
+- **Name the human action; never ask for "continue".** S3 began without
+  `.tests-locked` in both G1 and G2. Each time the marker was absent, and each
+  time the agent said the gate was blocked and waited — but never printed the
+  one line that would have unblocked it. The human was told *that* something
+  was missing, not *what to do*. An absent precondition is a stop, and the stop
+  must open with `YOUR ACTION: <the exact thing>` as its first line. Asking for
+  "continue" puts the burden of remembering the mechanism on the person who
+  delegated it. The marker is tracked now, so merging the plan PR creates it —
+  but the rule stands for every precondition.
+- **A verdict binds to a commit, so a merge into the branch invalidates it.**
+  `verdict.yml` requires `evaluated_commit` to name the head SHA. Merging main
+  into a feature branch moves that head, and the prior approval stops applying
+  — correctly, since that is what stops "approve a one-liner, then push four
+  hundred lines". Budget a re-evaluation after any merge into the branch. Seen
+  on PR #12 (`APPROVE@399fa5a` refused at head `815d866`) and PR #14.
+- **Restart a stalled evaluator at 15 minutes, with narrower scope.** Two
+  evaluations in G2 sat at zero bytes for 30 and 43 minutes against a 4–6
+  minute norm; one had produced the single line "I'll start by reading the
+  diff". Check the output file's mtime and size rather than waiting. Relaunch
+  scoped to the delta — one file, the specific change, an explicit list of what
+  earlier passes already cleared and must not be re-litigated.
+- **integrity.sh inverts the order for its own hooks.** It refuses every Bash
+  call while anything under `.claude/hooks` differs from HEAD, so a hook script
+  or its test suite cannot be run until it is committed. Editing a hook means
+  committing untested and testing after, which is backwards but is the guard
+  working. Commit in small steps and say so in the message. Note the escape
+  hatch takes a *single simple command*: `git add …` then `git commit …`, never
+  `git add … && git commit …`, because a compound first line is refused.
 - **On Git Bash, `cygpath -u "$TEMP"` is `/tmp`.** The Windows temp directory is
   mounted there, so `TMPDIR`, `TEMP`, `TMP`, and `/tmp` collapse to one root.
   A short roots list is correct, not a dropped entry — verify before "fixing" it.
