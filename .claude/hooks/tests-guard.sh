@@ -219,8 +219,11 @@ PATH_PAIRS_EOF
     # clause boundaries: `sh -c "npm test && git push -u origin main"` was
     # refused while the identical unquoted line was allowed — the exact
     # false-positive class this change exists to remove.
+    # `-c`, and also a short-flag cluster ending in it: `bash -lc "vitest -u"`
+    # and `sh -euc "vitest -u"` are the same construct and were walking past a
+    # test for the exact string.
     INNER=$(printf '%s\n' "$CMD_JOINED" | xargs -n1 printf '%s\n' 2>/dev/null | awk '
-      { if (prev == "-c") print; prev = $0 }')
+      { if (prev ~ /^-[A-Za-z]*c$/) print; prev = $0 }')
 
     # Quote-aware segmentation, the same splitter destructive-guard uses. A
     # naive `sed s/|/\n/g` cuts `--testNamePattern='a|b' -u` in half and drops
