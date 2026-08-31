@@ -84,7 +84,7 @@ process.stdin.on("end", () => {
   // empty result is "unknown", and every caller treats unknown as refused.
   const rel = (p) => {
     const q = String(p).replace(/\\\\/g, "/");
-    const abs = norm(isAbs(q) ? q : root + "/" + q);
+    const abs = winish(norm(isAbs(q) ? q : root + "/" + q));
     if (abs.toLowerCase() === root.toLowerCase()) return "";
     if (!abs.toLowerCase().startsWith(root.toLowerCase() + "/")) return "";
     return abs.slice(root.length + 1);
