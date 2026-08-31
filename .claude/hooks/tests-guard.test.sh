@@ -188,6 +188,19 @@ expect 0 "gcc -c"                            Bash command "gcc -c main.c"
 expect 0 "grep for the word in the marker"   Bash command "grep -n '\-delete' .tests-locked"
 expect 0 "upper-case scheme is still a URL"  Bash command "curl HTTPS://github.com/vitest-dev/vitest -u tok"
 expect 2 "rsync --delete onto the marker"    Bash command "rsync -a --delete src/ .tests-locked"
+# Round 5: every verb pattern ended in a trailing space, so a verb that was the
+# last word on the line matched none of them. One command removed the marker,
+# and a removed marker turns the entire guard off for the rest of the session.
+expect 2 "verb at end of line"               Bash command "echo .tests-locked | xargs rm"
+expect 2 "verb at end, with a path"          Bash command "echo .tests-locked | xargs /bin/rm"
+expect 2 "xargs unlink"                      Bash command "printf .tests-locked | xargs unlink"
+expect 2 "exec form"                         Bash command "find . -name .tests-locked -exec rm {} ;"
+# The runner and flag lists were the last comparisons that still cared about
+# case, while paths, the marker and the scheme had all been folded.
+expect 2 "upper-case runner"                 Bash command "npx VITEST -u"
+expect 2 "mixed-case runner"                 Bash command "npx Vitest -u"
+expect 2 "upper-case flag"                   Bash command "npx vitest --UPDATE-SNAPSHOT"
+expect 2 "upper-case npm test"               Bash command "npm TEST -- --update-snapshot"
 expect 2 "path escaping the repo"            Edit file_path "../outside/other.test.ts"
 
 printf '\n=== LOCKED: non-test work still flows ===\n'
