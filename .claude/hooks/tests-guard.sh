@@ -116,7 +116,13 @@ is_new_test_file() {
 
 case "$TOOL" in
   Edit|Write|NotebookEdit|MultiEdit)
-    for p in $PATHS; do
+    # One path per line, never `for p in $PATHS`. Unquoted word splitting cut
+    # "C:/Program Files/…/x.test.ts" into two fragments; the first was not a
+    # test path and the second was not a file anyone tracked, so a locked test
+    # under any directory with a space in its name went unprotected. Found by
+    # running the suite, not by reading — Git Bash rewrites a POSIX argv path
+    # into exactly that shape before node ever sees it.
+    while IFS= read -r p; do
       [ -z "$p" ] && continue
       if is_marker_path "$p"; then
         block "edit to the lock marker itself" "$TOOL $p"
@@ -128,7 +134,9 @@ case "$TOOL" in
         fi
         block "edit to a locked test file" "$TOOL $p"
       fi
-    done
+    done <<PATHS_EOF
+$PATHS
+PATHS_EOF
     exit 0
     ;;
   Bash)
