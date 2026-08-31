@@ -92,6 +92,19 @@ expect 0 "git branch -u"                     Bash command "git branch -u origin/
 expect 0 "test run, then a push with -u"     Bash command "npm test && git push -u origin feature"
 expect 2 "push, then a test run with -u"     Bash command "git push origin feature && npm test -- -u"
 
+# The marker freezes the approved list. A file nobody has approved is not on it,
+# and a plan PR exists precisely to propose one — with the marker inherited from
+# main, refusing new test files meant no plan PR could ever be written again.
+# The guard suites are excluded outright: integrity.sh governs .claude/hooks,
+# and it is the stricter guard, refusing every tool call while they drift.
+printf '\n=== LOCKED: proposals and guard suites are not the frozen list ===\n'
+expect 0 "write a brand-new test file"       Write file_path "tests/not-yet-proposed.test.ts"
+expect 0 "edit a hook suite"                 Edit file_path ".claude/hooks/tests-guard.test.sh"
+expect 0 "hook suite, absolute + backslash"  Edit file_path "$REPO_ROOT\\.claude\\hooks\\integrity.test.sh"
+# Fails closed: a path it cannot resolve to a repo-relative one is not "new".
+expect 2 "unresolvable absolute test path"   Edit file_path "/elsewhere/mystery.test.ts"
+expect 2 "path escaping the repo"            Edit file_path "../outside/other.test.ts"
+
 printf '\n=== LOCKED: non-test work still flows ===\n'
 # S3 is required to read the marker before its first edit, so reading must work.
 expect 0 "ls the marker"                     Bash command "ls -la .tests-locked"
