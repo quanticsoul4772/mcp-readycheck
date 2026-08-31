@@ -184,6 +184,34 @@ lint or a hook.
   rests on a human clicking merge, which is the attention that failed on PR #8.
   Treat the check as evidence that a verdict exists, never as evidence that it
   is honest.
+- **Tightening this gate has broken it twice; loosening it never has.** Two
+  revisions of `verdict.yml` in a row refused work they should have allowed,
+  and both were the same shape: **a branch that terminates where it should
+  continue.** First, an unparseable block containing the word "verdict" hard-
+  failed any PR quoting the workflow's own contract line. Then an unmet
+  `[plan]`/`[docs]` claim called `setFailed` and returned, never reaching the
+  verdict check — its error message said "so it needs an evaluator verdict" and
+  then never looked for one, so a plan PR carrying tests *and* a valid verdict
+  could not pass. Before adding a rule to this file, ask what legitimate PR it
+  refuses, and prefer falling through to a later check over returning early.
+- **Verify a workflow by executing it, not by reading it.** Every defect in
+  `verdict.yml` — six of them — was found by extracting the `script:` body into
+  a runnable function and running it against constructed cases. None was found
+  by reading. Reading passed all six.
+- **The Stop hook commits whatever is lying around.** `commit-backstop` swept an
+  evaluator's `.review-scratch/` into a feature branch as a `wip: session
+  backstop` commit, on top of a reviewed fix. It never reached the remote, so
+  the PR head stayed at the approved commit, and the local branch was realigned
+  with `git branch -f` to the remote — a pointer move, not a history rewrite,
+  with the dropped commit still in the reflog. Scratch now belongs in the job
+  temp directory, and `.gitignore` covers the patterns that leaked.
+
+  On what actually stops a rewrite: **this repo's `destructive-guard.sh` blocks
+  only `git reset --hard`** — it has no rule for plain `git reset` and none for
+  `git revert` at all. Those were refused in the session that hit this by the
+  operator's own machine-level settings, which are outside this repository and
+  may not apply to you. Do not read the repo's guard as a backstop it is not.
+  An earlier draft of this entry claimed otherwise and an evaluation caught it.
 - **The verdict block needs a field the evaluator does not emit on its own.**
   `verdict.yml` requires `{"verdict": …, "evaluated_commit": "<head sha>"}` in
   one object, but `.claude/agents/evaluator.md` specifies only
