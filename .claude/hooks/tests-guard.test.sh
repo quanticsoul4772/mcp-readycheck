@@ -179,6 +179,15 @@ expect 2 "absolute upper-case marker"        Bash command "rm $REPO_ROOT/.TESTS-
 expect 2 "two continuations"                 Bash command "npx vitest \\
   --run \\
   -u"
+# Round 4: the widened `-c` pattern must not treat an ordinary c-ending flag as
+# introducing a command, and a deletion flag is only a deletion when something
+# is walking the tree. Both are reads, and refusing a read is the shape already
+# in the mistake log.
+expect 0 "grep -c on a source file"          Bash command "grep -c TODO index.ts"
+expect 0 "gcc -c"                            Bash command "gcc -c main.c"
+expect 0 "grep for the word in the marker"   Bash command "grep -n '\-delete' .tests-locked"
+expect 0 "upper-case scheme is still a URL"  Bash command "curl HTTPS://github.com/vitest-dev/vitest -u tok"
+expect 2 "rsync --delete onto the marker"    Bash command "rsync -a --delete src/ .tests-locked"
 expect 2 "path escaping the repo"            Edit file_path "../outside/other.test.ts"
 
 printf '\n=== LOCKED: non-test work still flows ===\n'
