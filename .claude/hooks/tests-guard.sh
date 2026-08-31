@@ -64,10 +64,50 @@ is_marker_path() {
 }
 
 is_test_path() {
+  # The guard suites under .claude/hooks are not product tests, and freezing
+  # them froze the wrong thing: with the marker on main every branch inherits
+  # it, so `tests-guard.test.sh` — the file that proves this guard works —
+  # became unopenable, and so did every other hook suite. They have their own
+  # guard: integrity.sh refuses any tool call while .claude/hooks differs from
+  # HEAD, which is a stronger constraint than this one, not a weaker one.
+  case "$1" in
+    *.claude/hooks/*|.claude/hooks/*) return 1 ;;
+  esac
   case "$1" in
     *.test.*|*.spec.*|*/__tests__/*|*/__snapshots__/*|*.snap) return 0 ;;
     *) return 1 ;;
   esac
+}
+
+# Repo-relative form of a path, or the input unchanged when it cannot be
+# resolved. Callers must treat "unchanged" as "unknown", never as "safe".
+repo_relative() {
+  p=$(printf '%s' "$1" | tr '\134' '/')
+  root=$(printf '%s' "$REPO_ROOT" | tr '\134' '/')
+  case "$p" in
+    "$root"/*) printf '%s' "${p#"$root"/}" ;;
+    *) printf '%s' "$p" ;;
+  esac
+}
+
+# A test file that does not exist in HEAD and is not tracked is a *proposal*,
+# not part of the approved list — the marker freezes what a human approved, and
+# nobody has seen this one yet. Without this, a plan PR could never introduce
+# the very test file it exists to propose, because the marker it inherits from
+# main forbids writing one.
+#
+# Fails closed everywhere: an unresolvable path, an absolute path, a Windows
+# drive-letter path, or any git failure all return "not new", and the caller
+# refuses.
+is_new_test_file() {
+  rel=$(repo_relative "$1")
+  case "$rel" in
+    /*|?:*|*..*|"") return 1 ;;
+  esac
+  git -C "$REPO_ROOT" rev-parse --verify --quiet HEAD >/dev/null 2>&1 || return 1
+  git -C "$REPO_ROOT" cat-file -e "HEAD:$rel" 2>/dev/null && return 1
+  git -C "$REPO_ROOT" ls-files --error-unmatch "$rel" >/dev/null 2>&1 && return 1
+  return 0
 }
 
 case "$TOOL" in
