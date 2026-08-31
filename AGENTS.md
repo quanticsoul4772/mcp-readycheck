@@ -158,6 +158,26 @@ lint or a hook.
   after the git verb. The one refusal with no way out is a `hooks` key in the
   gitignored `.claude/settings.local.json`: no commit brings it under review, so
   only a human removing it clears the block.
+- **An absent guard is a stop, not an allowance.** Twice now a check that could
+  not run has been read as permission to proceed: the `.tests-locked` marker
+  that did not exist yet, and a PR merged while its verdict had not arrived.
+  Neither absence meant approval; both meant the gate had not been reached. If
+  the thing that would have said no is missing, that is the stop condition.
+- **A PR merged before the verdict defeats Gate B entirely.** PR #8 was merged
+  while the Stage 4 evaluator was still running; it returned BLOCK six minutes
+  later and three defects were already live — a failed audit that discarded its
+  own cause, a tool the model could not call, and a `readOnlyHint: true` on a
+  handler that POSTs. `verdict.yml` now makes an approving verdict a required
+  check, failing closed on a missing, malformed or BLOCK verdict, with `[plan]`
+  and `[docs]` title prefixes exempt.
+- **Manufact env vars are injected at deploy time only.** Setting or changing
+  one does nothing to a running deployment. `MANUFACT_API_KEY` was created at
+  00:29:02Z while the active deployment had finished building at 00:22:29Z, so
+  every call kept failing closed with the variable present and correctly scoped
+  (`environments: ["production"]`, `phase: "both"`). Redeploy without new code:
+  `POST /api/v1/deployments {serverId, branch: "main", trigger: "redeploy"}`.
+  The same applies to flipping `sensitive` — that re-creates the variable, so it
+  too needs a redeploy.
 - **On Git Bash, `cygpath -u "$TEMP"` is `/tmp`.** The Windows temp directory is
   mounted there, so `TMPDIR`, `TEMP`, `TMP`, and `/tmp` collapse to one root.
   A short roots list is correct, not a dropped entry — verify before "fixing" it.
