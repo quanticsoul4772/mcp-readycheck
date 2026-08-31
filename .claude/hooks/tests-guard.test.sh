@@ -76,6 +76,21 @@ expect 2 "unlink the marker"                 Bash command "unlink .tests-locked"
 expect 2 "truncate the marker"               Bash command "truncate -s 0 .tests-locked"
 expect 2 "redirect into the marker"          Bash command "echo x > .tests-locked"
 
+# A snapshot-update flag is only a snapshot-update flag when a test runner is
+# reading it. The first version of this check scanned the whole command for a
+# bare `-u` and refused `git push -u` and `cygpath -u` in a single session —
+# neither of which can reach a test. `sort -u` was refused too, inside a read.
+printf '\n=== LOCKED: -u only counts on a test runner ===\n'
+expect 2 "npm test -- -u"                    Bash command "npm test -- -u"
+expect 2 "yarn test -U"                      Bash command "yarn test -U"
+expect 0 "git push -u"                       Bash command "git push -u origin feature"
+expect 0 "cygpath -u"                        Bash command "cygpath -u /tmp"
+expect 0 "sort -u in a pipeline"             Bash command "grep -rn foo . | sort -u"
+expect 0 "git branch -u"                     Bash command "git branch -u origin/main"
+# The flag belongs to the segment it sits in, not to the line.
+expect 0 "test run, then a push with -u"     Bash command "npm test && git push -u origin feature"
+expect 2 "push, then a test run with -u"     Bash command "git push origin feature && npm test -- -u"
+
 printf '\n=== LOCKED: non-test work still flows ===\n'
 # S3 is required to read the marker before its first edit, so reading must work.
 expect 0 "ls the marker"                     Bash command "ls -la .tests-locked"
