@@ -318,8 +318,21 @@ SEGMENTS_EOF
       case "$(lower "$t")" in
         *.tests-locked)
           case "$(lower "$CMD")" in
-            *rm\ *|*rm\	*|*unlink\ *|*del\ *|*erase\ *|*mv\ *|*"git clean"*|*truncate\ *|*shred\ *|*-delete*)
+            *rm\ *|*rm\	*|*unlink\ *|*del\ *|*erase\ *|*mv\ *|*"git clean"*|*truncate\ *|*shred\ *)
               block "removal or move of the lock marker" "$CMD"
+              ;;
+          esac
+          # `-delete` only means deletion when something is walking the tree.
+          # As a bare substring it refused `grep -n '-delete' .tests-locked`,
+          # which is a read — the false-positive shape already in the mistake
+          # log as "a whole-command regex net is not a substitute for parsing".
+          case "$(lower "$CMD")" in
+            *find\ *|*fd\ *|*rsync\ *)
+              case "$(lower "$CMD")" in
+                *-delete*|*--delete*)
+                  block "removal of the lock marker by a tree walk" "$CMD"
+                  ;;
+              esac
               ;;
           esac
           ;;
