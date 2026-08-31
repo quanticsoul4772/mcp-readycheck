@@ -120,6 +120,20 @@ expect 2 "traversal out of .claude/hooks"    Write file_path ".claude/hooks/../.
 expect 2 "hooks substring inside a name"     Write file_path "notes.claude/hooks/x/../../../tests/readiness-tool.test.ts"
 expect 2 "dot-slash prefix"                  Edit file_path "./tests/readiness-tool.test.ts"
 expect 2 "windows separators"                Edit file_path "tests\\readiness-tool.test.ts"
+# Round 2 refused the two strings round 1 reported and allowed the rest of the
+# class: the classifier globs were still case-sensitive, so `.Test.` never
+# matched `*.test.*` and the tracked-list lookup was never reached. Same inode,
+# same bytes — a Write would have truncated the locked file.
+expect 2 "capital extension"                 Write file_path "tests/Readiness-Tool.Test.ts"
+expect 2 "capital extension only"            Write file_path "tests/readiness-tool.Test.ts"
+expect 2 "all caps"                          Write file_path "tests/READINESS-TOOL.TEST.TS"
+expect 2 "the other tracked suite, mixed"    Write file_path "tests/audit-report-view.Test.ts"
+expect 2 "redirect, upper case"              Bash command "echo x > tests/READINESS-TOOL.TEST.TS"
+# The marker names the same file whatever the case, and deleting it turns the
+# whole guard off.
+expect 2 "rm the marker, upper case"         Bash command "rm .TESTS-LOCKED"
+expect 2 "mv the marker, mixed case"         Bash command "mv .Tests-Locked /tmp/x"
+expect 2 "write the marker, upper case"      Write file_path ".TESTS-LOCKED"
 
 printf '\n=== LOCKED: the flag reaches the runner however it is written ===\n'
 expect 2 "pipe inside a quoted argument"     Bash command "npx vitest --testNamePattern='a|b' -u"
