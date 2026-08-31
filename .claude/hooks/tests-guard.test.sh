@@ -64,7 +64,23 @@ expect 2 "vitest -u"                         Bash command "npx vitest -u"
 expect 2 "jest --update-snapshot"            Bash command "npx jest --update-snapshot"
 expect 2 "redirect into a test file"         Bash command "echo x > src/audit.test.ts"
 
+# The marker protects the tests; something has to protect the marker. An agent
+# that can edit it rewrites the lock, and one that can delete it lifts the lock
+# and then edits every test above freely.
+expect 2 "edit the marker"                   Edit file_path ".tests-locked"
+expect 2 "write the marker"                  Write file_path ".tests-locked"
+expect 2 "rm the marker"                     Bash command "rm .tests-locked"
+expect 2 "rm -f the marker"                  Bash command "rm -f .tests-locked"
+expect 2 "mv the marker away"                Bash command "mv .tests-locked /tmp/parked"
+expect 2 "unlink the marker"                 Bash command "unlink .tests-locked"
+expect 2 "truncate the marker"               Bash command "truncate -s 0 .tests-locked"
+expect 2 "redirect into the marker"          Bash command "echo x > .tests-locked"
+
 printf '\n=== LOCKED: non-test work still flows ===\n'
+# S3 is required to read the marker before its first edit, so reading must work.
+expect 0 "ls the marker"                     Bash command "ls -la .tests-locked"
+expect 0 "cat the marker"                    Bash command "cat .tests-locked"
+expect 0 "test -f the marker"                Bash command "test -f .tests-locked"
 expect 0 "edit production source"            Edit file_path "index.ts"
 expect 0 "run the suite without -u"          Bash command "npx vitest run"
 expect 0 "ordinary build"                    Bash command "npm run build"
