@@ -68,7 +68,16 @@ process.stdin.on("end", () => {
     return out.join("/");
   };
 
-  const root = norm(process.env.HOOK_REPO_ROOT || "");
+  // Git Bash and the harness disagree about how to spell a Windows root:
+  // "/d/Projects/x" and "D:/Projects/x" are the same directory. Comparing them
+  // as strings makes every path look like it is outside the repo, which the
+  // fail-closed branch then refuses — including this hook'"'"'s own test suite.
+  const winish = (s) => {
+    const m = /^\/([A-Za-z])(\/.*)?$/.exec(s);
+    return m ? m[1].toUpperCase() + ":" + (m[2] || "/") : s;
+  };
+
+  const root = winish(norm(process.env.HOOK_REPO_ROOT || ""));
   const isAbs = (s) => s.startsWith("/") || /^[A-Za-z]:/.test(s);
 
   // Repo-relative canonical form, or "" when the path leaves the repo. An
