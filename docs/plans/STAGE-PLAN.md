@@ -109,6 +109,14 @@ stages that follow.
 13. **`readOnlyHint` is a claim about state, not about intent.** `start_audit`
     creates a persistent audit record, so the hint is false for it, whatever
     the tool's read-only purpose.
+15. **`get_audit` returns seven fields, not the five the goal named.**
+    `errorMessage` and `targetUrl` were added deliberately (decide 0.67,
+    runner-up: pass all fifteen response fields). Without `errorMessage`, an
+    audit that settles at `failed` returns only that it failed and discards the
+    cause the API supplied; without `targetUrl`, AC5's own subject is
+    unobservable through the tools. Both are in the audit-detail `required`
+    list, so the schema cannot be broken by a spec-conforming response. G2's
+    widget contract is these seven fields.
 14. **A relative module specifier cannot satisfy both toolchains.** TypeScript
     NodeNext wants `./x.js` and resolves it to `x.ts`; Node's type stripping
     resolves it literally. The `#lib/*` subpath imports map in `package.json`

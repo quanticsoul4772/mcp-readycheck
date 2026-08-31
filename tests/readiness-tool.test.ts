@@ -136,6 +136,16 @@ describe("AC2 — get_audit validates and preserves every category", () => {
 
     // Guard against a vacuous pass: with no checks on either side the deepEqual
     // below compares [] with [] and proves nothing about preservation.
+    //
+    // The status is asserted separately so the diagnosis points at the right
+    // subsystem. The before() hook exits on `failed` as well as `completed`, so
+    // a 502 at the target endpoint would otherwise surface here as a complaint
+    // about mapping fidelity.
+    assert.equal(
+      raw.status,
+      "completed",
+      `the audit settled at "${raw.status}" — the audit run failed, not the mapping`,
+    );
     assert.ok(
       (raw.checks ?? []).length > 0,
       "a completed audit must carry checks for this assertion to mean anything",
@@ -323,6 +333,13 @@ describe("guards that hold across the suite", () => {
 
     // The binding is the point of resolving the deployment at all: assert the
     // audit actually carries it, rather than that the function exists.
+    //
+    // Known limit: the only deployment id available here is the active one, and
+    // the API binds that by itself when the body omits deploymentId. So this
+    // would still pass if createAudit sent `{}` — D2's rejected runner-up.
+    // Distinguishing the two needs a non-active deployment id, which this
+    // server does not have. Strictly stronger than the assertion it replaced,
+    // but not proof that the id was sent.
     const audit = await fetchAudit(SERVER_ID, created.id);
     assert.equal(audit.deploymentId, deploymentId);
   });
