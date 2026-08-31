@@ -42,8 +42,8 @@ renders the real result, and the fail-to-green cycle is reproducible.
 | 6 | Slug rename, CI workflow, ruleset, PROGRESS.md | complete |
 | 7 | Phase 0 floor — hooks, settings, agents, AGENTS.md, plans | complete |
 | 8 | `run_readiness_check` — start/get tool pair | complete (G1: `start_audit` / `get_audit`) |
-| 9 | Readiness widget — one View, grouped by category | next (G2) |
-| 10 | Redeploy and self-audit green | |
+| 9 | Readiness widget — one View, grouped by category | complete (G2) |
+| 10 | Redeploy and self-audit green | next (G3): 32-check worklist |
 | 11 | Staged one-line failure, red to green | |
 | 12 | Autofix trigger surfacing the PR link (optional) | |
 
@@ -149,6 +149,31 @@ stages that follow.
     constructed cases. Reading passed all six. Two of the six were introduced by
     *tightening* the gate, and both were the same shape: a branch that
     terminates where it should continue.
+20. **Mark Stage 9 complete.** The `audit-report` view ships: `start_audit` is
+    bound to it, `get_audit` carries `visibility: ["app"]`, and the deployed
+    Inspector renders a live audit. Verified on the wire and in the browser,
+    not inferred from the diff.
+21. **`hint` really is an object on the wire.** A completed audit of this
+    server returned `hint` types `["null","object"]` — never a string. G1's D3
+    chose `z.unknown()` for `hint` and `details` on the strength of the spec's
+    `anyOf: [{}, null]`; this is the live confirmation. A `z.string()` there
+    would fail runtime validation against an ordinary response, and any view
+    rendering it must stringify rather than assume.
+22. **A view cannot poll `useToolContext`.** It latches the first structured
+    result for the view's lifetime and later notifications cannot overwrite it,
+    so the rendering invocation is permanently the *start* of the job. Progress
+    comes from `useCallTool`, and the ids come off the latched
+    `toolInput`/`toolOutput`.
+23. **Schedule a polling loop from completion, never from call time.** Arming
+    the next timer before the current call returns lets a slow response overlap
+    the one after it, and an out-of-order arrival then overwrites a settled
+    result with a stale one and restarts polling. Schedule in the completion
+    path of each call, so exactly one is ever in flight.
+24. **Put the error banner above the early return.** A refresh failure that
+    leaves the primary state null takes the "still loading" branch, so a banner
+    rendered after that branch is unreachable on exactly the path that needs
+    it — a broken refresh then displays as healthy progress. This shipped once
+    and an evaluation caught it.
 
 ## Invariants
 
