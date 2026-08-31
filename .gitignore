@@ -58,4 +58,12 @@ PROGRESS.md
 .scratch/
 *.scratch.*
 /scratch.*
+
+# The old park-and-restore backup from tests-guard.test.sh. The suite no longer
+# creates one, but the Stop hook committed this file as a TRACKED blob twice, on
+# two different branches, while a suite run was interrupted mid-way. Tracked, it
+# makes `[ -f "$MARKER.testbak" ]` true on every fresh clone and the suite
+# refuses to start until someone deletes a committed file. Ignored, that cannot
+# happen again even if some future revision reintroduces the file.
+.tests-locked.testbak
 /tmp/

@@ -389,8 +389,29 @@ lint or a hook.
   `/usr/bin/rm.exe` exists on Git Bash and runs from it; comparing `${t##*/}`
   against a bare `rm` let `rm.exe .tests-locked` delete the marker, and the
   substring form it replaced never caught it either. Strip a trailing `.exe`.
+- **A test must not mutate the thing it is testing when that thing is a global
+  switch.** `tests-guard.test.sh` parked the repository's real `.tests-locked`,
+  wrote a 0-byte fake over it, and restored at the end. Three separate incidents
+  came out of that window, and a `trap` only closed two of them: a run killed by
+  a timeout left ` D .tests-locked`; a run that began while the marker was
+  absent recorded "no lock here" and deleted the marker it had written; and
+  **twice, on two different branches, the Stop hook committed the transient
+  state** — `.tests-locked` as 0 bytes and `.tests-locked.testbak` as a tracked
+  file. Pushed, that empties the frozen list and makes the suite refuse to start
+  on every fresh clone. No `trap` can fix the third, because the process that
+  commits is not the process that dies.
+  The fix is to stop creating the state: the LOCKED cases use the repository's
+  real marker exactly as it is (the guard tests existence, not content, so there
+  is nothing to fake), and the UNLOCKED cases point `CLAUDE_PROJECT_DIR` at an
+  empty temp directory, where the guard finds no marker and exits 0 — precisely
+  the behaviour under test, with the repository untouched. Cutting a fresh
+  branch moved the symptom and not the mechanism; the second occurrence happened
+  on the new branch within the hour.
+  The earlier entry claiming "`.gitignore` covers the patterns that leaked" was
+  false for this one: `.tests-locked.testbak` was never ignored. It is now.
 - **A suite that parks the guard's own switch must restore it on every exit
-  path.** `tests-guard.test.sh` moved the real `.tests-locked` aside, wrote a
+  path.** Superseded by the entry above — kept because the reasoning is still
+  right for anything that genuinely must park state. `tests-guard.test.sh` moved the real `.tests-locked` aside, wrote a
   fake over it, and restored at the end — with no `trap`. The guard's first line
   is `[ -f "$MARKER" ] || exit 0`, so any interruption in that window left the
   repository silently unlocked, every locked test editable by plain `Write`, and
