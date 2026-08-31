@@ -19,6 +19,40 @@ FAIL=0
 MARKER_PREEXISTING=0
 [ -f "$MARKER" ] && MARKER_PREEXISTING=1
 
+# This suite parks the real marker, writes a fake over it, and restores at the
+# end. Between those two points the repository has no lock: the guard's very
+# first line is `[ -f "$MARKER" ] || exit 0`, so an interrupted run leaves every
+# locked test editable by plain Write, silently, with no refusal printed.
+#
+# That is not hypothetical. An evaluation's run was killed by a timeout,
+# `git status` showed ` D .tests-locked`, and a second run then computed
+# MARKER_PREEXISTING from the fake and clobbered the real backup. Recovery was
+# accidental. The window was about two and a half minutes wide, and AGENTS.md
+# tells agents to run these suites.
+#
+# Restore on every exit path, not just the happy one. Refuse to start if a
+# previous run left its backup behind, rather than overwriting it.
+if [ -f "$MARKER.testbak" ]; then
+  printf 'A previous run left %s behind.\n' "$MARKER.testbak" >&2
+  printf 'Restore it first: mv "%s" "%s"\n' "$MARKER.testbak" "$MARKER" >&2
+  exit 1
+fi
+
+restore_marker() {
+  status=$?
+  if [ -f "$MARKER.testbak" ]; then
+    mv -f "$MARKER.testbak" "$MARKER"
+  elif [ "$MARKER_PREEXISTING" -eq 1 ] && [ ! -f "$MARKER" ]; then
+    # The backup is gone and the real marker is not back: recover from git
+    # rather than leaving the repository unlocked.
+    git -C "$REPO_ROOT" checkout -- .tests-locked 2>/dev/null || :
+  elif [ "$MARKER_PREEXISTING" -eq 0 ]; then
+    [ -f "$MARKER" ] && command rm -f "$MARKER"
+  fi
+  exit $status
+}
+trap restore_marker EXIT INT TERM HUP
+
 payload() {
   node -e '
 const [tool, key, value] = process.argv.slice(1);
