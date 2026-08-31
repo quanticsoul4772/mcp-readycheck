@@ -21,8 +21,10 @@ import {
   type AuditSummary,
   type ViewCheck,
   groupByCategory,
+  isTerminal,
   nextPollDelay,
   readinessLabel,
+  refreshArgs,
   summarize,
 } from "./report.js";
 import "./view.css";
@@ -98,37 +100,81 @@ export default function AuditReport() {
   const getAudit = useCallTool("get_audit");
 
   const [audit, setAudit] = useState<AuditOutput | null>(null);
+  const [pollError, setPollError] = useState<Error | null>(null);
+  const [gaveUp, setGaveUp] = useState(false);
   const startedAt = useRef<number>(Date.now());
 
-  // The ids the refresh needs, off the latched rendering invocation.
-  const serverId = (view.toolInput as { serverId?: string } | undefined)?.serverId;
-  const auditId =
-    audit?.auditId ??
-    (view.status === "ready"
-      ? (view.toolOutput as { auditId?: string } | undefined)?.auditId
-      : undefined);
+  // The latched rendering invocation. Read only when it is ready — a pending or
+  // errored context has no toolOutput.
+  const latched =
+    view.status === "ready"
+      ? (view.toolOutput as { auditId?: string; status?: string } | undefined)
+      : undefined;
 
-  const status = audit?.status ?? "pending";
+  // Built by the same function the locked test pins, rather than a second
+  // inline copy of the rule — so T8 guards the path that actually runs.
+  const args = refreshArgs(view.toolInput as { serverId?: string } | undefined, {
+    auditId: audit?.auditId ?? latched?.auditId,
+  });
+
+  // start_audit already told us the status; use it rather than assuming pending.
+  const status = audit?.status ?? latched?.status ?? "pending";
+  const statusRef = useRef(status);
+  statusRef.current = status;
+
+  const serverId = args?.serverId;
+  const auditId = args?.auditId;
 
   useEffect(() => {
     if (!serverId || !auditId) return;
 
-    const delay = nextPollDelay({ status, elapsedMs: Date.now() - startedAt.current });
-    if (delay === null) return; // settled, or past the deadline
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
 
-    const timer = setTimeout(() => {
-      void getAudit
-        .callTool({ serverId, auditId })
-        .then((result) => setAudit(result.structuredContent as AuditOutput))
-        .catch(() => {
-          // The handle keeps the error; the banner below reads it. Swallowing
-          // it here would only stop the next tick from being scheduled.
-        });
-    }, delay);
+    // Scheduling happens on completion, never at call time. Arming the next
+    // timer before the current call returns lets a slow response overlap the
+    // one after it, and an out-of-order arrival can then overwrite a settled
+    // audit with a stale running one.
+    const schedule = (current: string) => {
+      const delay = nextPollDelay({
+        status: current,
+        elapsedMs: Date.now() - startedAt.current,
+      });
+      if (delay === null) {
+        if (!isTerminal(current)) setGaveUp(true);
+        return;
+      }
+      timer = setTimeout(poll, delay);
+    };
 
-    return () => clearTimeout(timer);
-    // `getAudit.data` advances the effect after each completed call.
-  }, [serverId, auditId, status, getAudit.data, getAudit.error]);
+    const poll = async () => {
+      if (cancelled) return;
+      try {
+        const result = await getAudit.callTool({ serverId, auditId });
+        if (cancelled) return;
+        const next = result.structuredContent as AuditOutput;
+        setAudit(next);
+        setPollError(null);
+        schedule(next.status);
+      } catch (error) {
+        if (cancelled) return;
+        // Surfaced, not swallowed. Rendering continues to retry until the
+        // deadline, because one failed read does not mean the audit is gone.
+        setPollError(error instanceof Error ? error : new Error(String(error)));
+        schedule(statusRef.current);
+      }
+    };
+
+    schedule(statusRef.current);
+
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+    // Only the ids drive the loop. The loop reschedules itself from its own
+    // results, so status must not be a dependency or every tick would restart it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serverId, auditId]);
 
   if (view.status === "error") {
     return (
@@ -138,10 +184,25 @@ export default function AuditReport() {
     );
   }
 
+  // Refresh failures render above the pending branch. Placing this below it
+  // made the banner unreachable whenever the *first* poll failed, so a broken
+  // get_audit showed as a healthy running audit for the whole deadline.
+  const refreshBanner = pollError ? (
+    <p className="ar-error">Could not read the audit: {pollError.message}</p>
+  ) : null;
+
+  const gaveUpBanner = gaveUp ? (
+    <p className="ar-note">
+      Stopped checking after 5 minutes. The audit had not settled.
+    </p>
+  ) : null;
+
   if (!audit) {
     return (
       <div className="ar">
         <h2 className="ar-title">Readiness audit</h2>
+        {refreshBanner}
+        {gaveUpBanner}
         <p className="ar-note">
           {auditId ? `Audit ${auditId} is running…` : "Starting the audit…"}
         </p>
@@ -165,13 +226,12 @@ export default function AuditReport() {
         {summary.isSettled ? audit.status : `${audit.status}…`}
       </p>
 
-      {summary.isFailed && summary.errorMessage ? (
-        <p className="ar-error">{summary.errorMessage}</p>
-      ) : null}
+      {/* errorMessage is nullable and not gated on `failed`: the spec does not
+          forbid the API populating it on a settled-but-not-failed audit. */}
+      {summary.errorMessage ? <p className="ar-error">{summary.errorMessage}</p> : null}
 
-      {getAudit.error ? (
-        <p className="ar-error">Refresh failed: {getAudit.error.message}</p>
-      ) : null}
+      {refreshBanner}
+      {gaveUpBanner}
 
       <Checks audit={audit} summary={summary} />
     </div>
