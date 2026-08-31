@@ -110,8 +110,17 @@ reading its *contents*, and the attribution sat there unread through an entire
 goal spent inferring what it stated outright. The G3 hypothesis about which tool
 was at fault happened to be correct; it need never have been a hypothesis.
 
-So the demo produced a finding beyond its own acceptance criteria: read
-`details`, not just `message`.
+So the demo produced a finding beyond its own acceptance criteria: **on a failing
+check, read `details`, not just `message`.**
+
+The qualifier is load-bearing. Across all 96 check-records in these three
+captures, `details` is non-empty **only** on failing checks — `null` on five,
+an empty array on twenty-six or so, populated on the rest. And only two checkIds
+ever carry it: `tool-hints-present`, which is empty when it passes, and
+`tool-resource-metadata-complete`, whose label is `uri` and names the offending
+*resource* rather than a tool. So the rule this demo supports is that a failing
+check may name its own cause — not that `details` is an attribution field in
+general.
 
 ## `tool-resource-metadata-complete` is untouched, deliberately
 
@@ -152,9 +161,13 @@ Re-staging the break to obtain a screenshot would put the production server back
 into a false-advertising state for a cosmetic asset. No acceptance criterion
 requires a screenshot; the plan's D3 named them as the human-legible half, not as
 evidence. The red evidence is `audit-red.json`, taken from the live deployment
-through the deployed tools while the break was active, and the audit's own
-`deploymentId` field records that it ran against `918b87d3` — which is
-independent of anything this repository asserts.
+through the deployed tools while the break was active.
+
+Stronger than that file, because it is not in this repository at all: **Manufact's
+own record for audit `5309c70b` carries `deploymentId: 918b87d3`**, the break
+deployment. The mapped `get_audit` shape drops that field, so you will not find
+it in `audit-red.json` — refetch the audit from the API and it is there. Nothing
+this repository asserts is load-bearing for it.
 
 Note also that `/mcp/inspector` is dev-only and 404s on the deployment; the
 hosted Inspector reached from the `/mcp` landing page is what renders a deployed
