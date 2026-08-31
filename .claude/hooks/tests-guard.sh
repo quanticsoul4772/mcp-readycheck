@@ -324,6 +324,10 @@ SEGMENTS_EOF
     # editable. Refused by the same guard the marker switches on.
     TOKENS=$(printf '%s\n' "$CMD" | xargs -n1 printf '%s\n' 2>/dev/null) || TOKENS=""
     [ -z "$TOKENS" ] && TOKENS=$(printf '%s\n' "$CMD" | tr ' \t' '\n\n')
+    # Folded once, not once per token. `lower()` forks a subshell and a `tr`
+    # each call; inside a per-token loop that cost about 1.8s on every Bash,
+    # Edit and Write the session makes.
+    TOKENS_L=$(printf '%s\n' "$TOKENS" | tr 'A-Z' 'a-z')
     # Whether any token IS a removal verb, rather than whether the command
     # CONTAINS one followed by a space. `echo .tests-locked | xargs rm` deleted
     # the marker and was allowed, because every pattern here ended in `\ *` and
