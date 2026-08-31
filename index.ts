@@ -128,9 +128,16 @@ export const sayHello = server.tool(
 // tool would hold a request open for the whole audit and give the view nothing
 // to render until it finished (STAGE-PLAN correction 5).
 //
-// No view binding in G1. G2 adds `view: { name: "audit-report" }` together with
-// `views/audit-report/` — binding a view whose directory is not in the primed
-// registry throws at mount, which neither typecheck nor build would catch.
+// G2 binds the view. All three edits — the `views/audit-report/` directory, the
+// `view:` binding below, and `visibility: "app"` on get_audit — ship in one
+// change (STAGE-PLAN correction 12). Binding a view whose directory is not in
+// the primed registry throws at mount, and marking get_audit app-only before a
+// view exists leaves it callable by nothing. Neither is catchable by CI, which
+// never mounts the server.
+//
+// No `csp` block: this view makes no network request. It calls get_audit
+// through the host bridge, and the framework already appends the server origin
+// to connectDomains. Naming the API origin would grant reach it never uses.
 
 const startAuditInputSchema = z.object({
   serverId: z
@@ -197,6 +204,11 @@ export const startAudit = server.tool(
       "Returns an auditId immediately; read the result with get_audit.",
     inputSchema: startAuditInputSchema,
     outputSchema: startAuditOutputSchema,
+    view: {
+      name: "audit-report",
+      description: "Readiness audit grouped by category, with both platform badges",
+      prefersBorder: false,
+    },
     // readOnlyHint is false, against the goal text's `true`: this POSTs and
     // creates a persistent audit record on an external service, which is
     // exactly what the annotation denies. A host that auto-approves read-only
@@ -221,13 +233,10 @@ export const getAudit = server.tool(
       "categories the API returns.",
     inputSchema: getAuditInputSchema,
     outputSchema: auditOutputSchema,
-    // `visibility: "app"` is deliberately omitted in G1. The SDK defines "app"
-    // as "app-private helper tools callable from views via useCallTool while
-    // the host hides them from the model" — and G1 ships no view. Declaring it
-    // now would leave get_audit callable by nothing: hidden from the model,
-    // with no view to call it from, which contradicts the OUTCOME's
-    // requirement that both tools be callable. G2 adds it back alongside
-    // views/audit-report/.
+    // Restored in G2, in the same change that adds the view. `"app"` marks a
+    // tool the host hides from the model and exposes to views via useCallTool;
+    // with no view it was callable by nothing, which is why G1 omitted it.
+    visibility: "app",
     annotations: {
       readOnlyHint: true,
       destructiveHint: false,
