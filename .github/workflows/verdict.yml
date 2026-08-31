@@ -1,0 +1,201 @@
+name: Verdict
+
+# Gate B was defeated once: PR #8 was merged at 23:47:38Z while its evaluator
+# was still running, the BLOCK arrived 72 seconds later, and three defects were
+# already live. This check makes an approving verdict a precondition of merging.
+#
+# It fails closed. No verdict, an unparseable one, a BLOCK, a verdict that does
+# not name the commit being merged, or a false exemption claim all fail — an
+# absent guard is a stop, not an allowance.
+#
+# THE VERDICT CONTRACT. The PR body must contain a fenced JSON block that is a
+# single object carrying both fields:
+#
+#     {"verdict": "APPROVE" | "APPROVE-WITH-NOTES", "evaluated_commit": "<sha>"}
+#
+# Both must live in the SAME object. An earlier draft tested the verdict and
+# the commit as two independent substring searches over the whole body, which
+# an evaluation defeated by executing it: a round-1 APPROVE plus a round-2
+# BLOCK naming the head commit passed, because each test matched a different
+# block. That is not adversarial input — it is the exact shape a BLOCK-then-fix
+# cycle leaves behind, so the gate would have gone green on a live BLOCK.
+#
+# A non-approving verdict for the head commit fails even if an approving one
+# for an older commit is still in the body. The most recent judgement of the
+# code being merged is the one that counts.
+#
+# merge_group is deliberately NOT a trigger. Gating a step on the event type
+# while declaring the trigger makes a merge-group run report success having
+# evaluated nothing. Without the trigger a merge queue stalls on a check that
+# never reports, which is a stop. (Decide 0.58 preferred implementing real
+# merge-group evaluation; overridden, because no merge queue exists on this
+# repository and speculative machinery for one is how fail-open paths get
+# written. If a queue is ever enabled, implement it then — do not re-add the
+# trigger without the evaluation.)
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize, ready_for_review]
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: verdict-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  verdict:
+    name: verdict
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for an approving evaluator verdict
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const headSha = pr.head.sha;
+            const shortSha = headSha.slice(0, 7);
+            const APPROVING = new Set(['APPROVE', 'APPROVE-WITH-NOTES']);
+
+            // --- exemption -------------------------------------------------
+            // Both halves must hold: the declared intent AND the actual diff.
+            // "Documentation" is Markdown under docs/ plus the root README, and
+            // nothing else. AGENTS.md, CLAUDE.md and .claude/** are standing
+            // instructions to agents — behaviour, not prose — and tests are
+            // executable. All of them need a verdict.
+            if (/^\s*\[(plan|docs)\]/i.test(pr.title ?? '')) {
+              const files = await github.paginate(github.rest.pulls.listFiles, {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: pr.number,
+                per_page: 100,
+              });
+
+              // listFiles caps at 3000 and paginate truncates silently, so a
+              // huge diff must fail rather than exempt on an incomplete list.
+              if (files.length >= 3000) {
+                core.setFailed(
+                  `Diff has ${files.length} files; the file list may be truncated, ` +
+                    'so a [plan]/[docs] exemption cannot be verified. Needs a verdict.',
+                );
+                return;
+              }
+
+              // A rename reports only its DESTINATION in `filename`, so
+              // `git mv .github/workflows/verdict.yml docs/verdict.yml.md`
+              // under a [docs] title would read as documentation and delete
+              // this gate under its own exemption. Where the file came from
+              // counts as much as where it landed.
+              const docPath = (p) =>
+                typeof p === 'string' &&
+                ((p.startsWith('docs/') && p.endsWith('.md')) || p === 'README.md');
+              const isDoc = (f) =>
+                docPath(f.filename) &&
+                (f.previous_filename === undefined || docPath(f.previous_filename));
+              const other = files
+                .filter((f) => !isDoc(f))
+                .map((f) => (f.previous_filename ? `${f.previous_filename} -> ${f.filename}` : f.filename));
+
+              if (other.length === 0) {
+                core.info(`Exempt: ${files.length} file(s), all documentation.`);
+                return;
+              }
+              core.setFailed(
+                'This PR claims a [plan]/[docs] exemption but changes files that are ' +
+                  'not documentation, so it needs an evaluator verdict:\n  ' +
+                  other.join('\n  '),
+              );
+              return;
+            }
+
+            // --- collect verdict objects from the body ----------------------
+            const body = pr.body ?? '';
+            const candidates = [];
+            for (const [, block] of body.matchAll(/```(?:json)?\s*([\s\S]*?)```/g)) {
+              candidates.push(block);
+            }
+            candidates.push(body); // a body that is itself bare JSON
+
+            const verdicts = [];
+            for (const text of candidates) {
+              const trimmed = text.trim();
+              let parsed;
+              try {
+                parsed = JSON.parse(trimmed);
+              } catch {
+                // A block that mentions a verdict but will not parse is not
+                // prose to skip over. Skipping it is how a BLOCK with one
+                // trailing comma disappears while a reader still sees the word
+                // in the body — so an unparseable verdict-shaped block fails.
+                if (/"verdict"/.test(trimmed) && trimmed !== body.trim()) {
+                  core.setFailed(
+                    'A block in the PR body mentions "verdict" but is not valid JSON, ' +
+                      'so it cannot be read. Fix the JSON rather than leaving it ambiguous:\n' +
+                      trimmed.slice(0, 400),
+                  );
+                  return;
+                }
+                continue; // ordinary prose
+              }
+              if (parsed && typeof parsed === 'object' && typeof parsed.verdict === 'string') {
+                verdicts.push(parsed);
+              }
+            }
+
+            const describe = verdicts.length
+              ? verdicts
+                  .map((v) => `${v.verdict}@${v.evaluated_commit ?? 'no-commit'}`)
+                  .join(', ')
+              : 'none';
+
+            if (verdicts.length === 0) {
+              core.setFailed(
+                'No parseable evaluator verdict in the PR body.\n' +
+                  'Gate B needs a fenced JSON block that is a single object with both\n' +
+                  '  "verdict": "APPROVE" | "APPROVE-WITH-NOTES"\n' +
+                  `  "evaluated_commit": "${shortSha}"\n` +
+                  '[plan]/[docs] titles are exempt only when the diff is docs-only.',
+              );
+              return;
+            }
+
+            // The value must be a real abbreviated SHA before it is compared.
+            // `headSha.startsWith(c)` is true for the empty string and for any
+            // single leading character, so an unconstrained prefix match would
+            // let {"evaluated_commit": ""} name every commit there is.
+            const namesHead = (v) => {
+              const c =
+                typeof v.evaluated_commit === 'string'
+                  ? v.evaluated_commit.trim().toLowerCase()
+                  : '';
+              if (!/^[0-9a-f]{7,40}$/.test(c)) return false;
+              return headSha.startsWith(c);
+            };
+
+            const forHead = verdicts.filter(namesHead);
+
+            // A current non-approving verdict is decisive, whatever else the
+            // body still carries from earlier rounds.
+            const blocking = forHead.filter((v) => !APPROVING.has(v.verdict));
+            if (blocking.length > 0) {
+              core.setFailed(
+                `The evaluator's verdict for ${shortSha} is ` +
+                  `${blocking.map((v) => v.verdict).join(', ')}.\n` +
+                  'Address it and re-evaluate against the new commit.',
+              );
+              return;
+            }
+
+            if (forHead.some((v) => APPROVING.has(v.verdict))) {
+              core.info(`Approving verdict for head commit ${shortSha}.`);
+              return;
+            }
+
+            core.setFailed(
+              `No verdict names the head commit ${shortSha}.\n` +
+                'An approval given for an earlier commit does not carry forward.\n' +
+                `Verdicts found: ${describe}`,
+            );
