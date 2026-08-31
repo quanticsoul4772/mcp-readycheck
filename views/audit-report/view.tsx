@@ -165,7 +165,13 @@ export default function AuditReport() {
       }
     };
 
-    schedule(statusRef.current);
+    // Read once immediately rather than after an interval. Two reasons, both
+    // found by evaluation: the latched start_audit status may already be
+    // terminal — schema-legal, since startAuditOutputSchema.status is the full
+    // four-value enum — and scheduling from it would then make zero calls and
+    // leave the view showing "running…" forever with no data. It also removes a
+    // 2 s blank before the first read on an audit that settles quickly.
+    void poll();
 
     return () => {
       cancelled = true;
