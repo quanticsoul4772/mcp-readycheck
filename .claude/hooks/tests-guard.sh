@@ -53,6 +53,16 @@ block() {
   exit 2
 }
 
+# The marker itself is protected while it is in force. Editing it would let an
+# agent rewrite the lock; deleting it would let one lift the lock and then edit
+# the tests freely. Reading it is untouched — S3 is required to `ls` it.
+is_marker_path() {
+  case "$1" in
+    *.tests-locked|.tests-locked) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 is_test_path() {
   case "$1" in
     *.test.*|*.spec.*|*/__tests__/*|*/__snapshots__/*|*.snap) return 0 ;;
@@ -64,6 +74,9 @@ case "$TOOL" in
   Edit|Write|NotebookEdit|MultiEdit)
     for p in $PATHS; do
       [ -z "$p" ] && continue
+      if is_marker_path "$p"; then
+        block "edit to the lock marker itself" "$TOOL $p"
+      fi
       if is_test_path "$p"; then
         block "edit to a locked test file" "$TOOL $p"
       fi
@@ -85,6 +98,21 @@ case "$TOOL" in
     # Redirection into a test file is an edit by another name.
     if printf '%s' "$CMD" | grep -qE '>[[:space:]]*[^[:space:]]*\.(test|spec)\.' ; then
       block "shell redirection into a locked test file" "$CMD"
+    fi
+
+    # Removing the marker would lift the lock, after which every test above is
+    # editable. Refused by the same guard the marker switches on.
+    for t in $TOKENS; do
+      if is_marker_path "$t"; then
+        case "$CMD" in
+          *rm\ *|*rm\	*|*unlink\ *|*del\ *|*erase\ *|*mv\ *|*"git clean"*|*truncate\ *)
+            block "removal or move of the lock marker" "$CMD"
+            ;;
+        esac
+      fi
+    done
+    if printf '%s' "$CMD" | grep -qE '>[[:space:]]*[^[:space:]]*\.tests-locked' ; then
+      block "shell redirection into the lock marker" "$CMD"
     fi
     exit 0
     ;;
