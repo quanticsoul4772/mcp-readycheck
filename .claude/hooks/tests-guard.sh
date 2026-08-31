@@ -53,7 +53,7 @@ process.stdin.on("end", () => {
   const b64 = s => Buffer.from(String(s == null ? "" : s), "utf8").toString("base64");
 
   const norm = (s) => {
-    const parts = String(s).replace(/\\\\/g, "/").split("/");
+    const parts = String(s).replace(/\\/g, "/").split("/");
     const out = [];
     for (const seg of parts) {
       if (seg === "" && out.length) continue;
