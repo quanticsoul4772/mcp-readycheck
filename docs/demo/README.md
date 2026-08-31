@@ -114,13 +114,22 @@ So the demo produced a finding beyond its own acceptance criteria: **on a failin
 check, read `details`, not just `message`.**
 
 The qualifier is load-bearing. Across all 96 check-records in these three
-captures, `details` is non-empty **only** on failing checks — `null` on five,
-an empty array on twenty-six or so, populated on the rest. And only two checkIds
-ever carry it: `tool-hints-present`, which is empty when it passes, and
+captures — 32 checks × 3 audits — `details` breaks down as **15 `null`, 77 empty
+arrays, and 4 populated**. It is empty or null on 96% of them, and every one of
+the 4 populated records is a **failing** check. No passing check carries it.
+
+The five checks whose `details` is `null` are the same five in all three
+captures — `server-responds`, `tools-list-responds`, `resources-list-responds`,
+`server-tools-capability-declared`, `view-resource-coverage` — so that set is
+structural, not an accident of one run.
+
+Only two checkIds ever carry a populated `details`: `tool-hints-present`, which
+is empty when it passes and populated only in the red capture, and
 `tool-resource-metadata-complete`, whose label is `uri` and names the offending
-*resource* rather than a tool. So the rule this demo supports is that a failing
-check may name its own cause — not that `details` is an attribution field in
-general.
+*resource* rather than a tool.
+
+So the rule this demo supports is that a failing check may name its own cause —
+not that `details` is an attribution field in general.
 
 ## `tool-resource-metadata-complete` is untouched, deliberately
 
