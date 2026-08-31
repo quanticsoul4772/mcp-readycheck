@@ -43,9 +43,9 @@ renders the real result, and the fail-to-green cycle is reproducible.
 | 7 | Phase 0 floor — hooks, settings, agents, AGENTS.md, plans | complete |
 | 8 | `run_readiness_check` — start/get tool pair | complete (G1: `start_audit` / `get_audit`) |
 | 9 | Readiness widget — one View, grouped by category | complete (G2) |
-| 10 | Redeploy and self-audit green | next (G3): 32-check worklist |
-| 11 | Staged one-line failure, red to green | |
-| 12 | Autofix trigger surfacing the PR link (optional) | |
+| 10 | Redeploy and self-audit green | complete (G3): green baseline `f4022c88`, 31/32 |
+| 11 | Staged one-line failure, red to green | complete (G4): `docs/demo/`, red `5309c70b` → green `a8c78006` |
+| 12 | Autofix trigger surfacing the PR link (optional) | next (G5) |
 
 Stages 8 onward run the operating cycle: issue with Default-FAIL criteria →
 plan file → **Gate A** → `.tests-locked` → TDD → evaluator → CI → **Gate B**.
@@ -229,6 +229,63 @@ stages that follow.
     state, twice, on two branches — cannot be fixed by a `trap`, because the
     process that commits is not the process that dies. Remove the window rather
     than guarding it.
+
+## Corrections added by G4
+
+34. **`details` names the cause on a failing check. Read it.** Correction 4 and
+    G3's plan both say `hint` and `details` are untyped (`anyOf: [{}, null]`),
+    which is true and was the right reason not to assume they were strings. But
+    refusing to assume the *type* turned into never reading the *contents*, and
+    G3 spent a goal inferring which tool tripped `tool-hints-present` while the
+    audit was naming it outright:
+
+        {"label": "get_audit.annotations.openWorldHint",
+         "value": "cannot be true when readOnlyHint is true because reads do
+                   not change external state"}
+
+    G3's plan states "the tool is inferred, not named by the audit." That was
+    wrong. Bounded by the data: across 96 check-records (32 checks × 3 audits),
+    `details` is 15 `null`, 77 empty, **4 populated — every one a failing
+    check**. It is not an attribution field in general; a failing check may name
+    its own cause. The five `null` checks are the same five in all three
+    captures, so that set is structural.
+35. **Severity gates readiness, and one error check is enough.** G3 established
+    that warnings do not gate (correction 27). G4 measured the converse, which
+    G3 explicitly could not: with `tool-hints-present` the *only* error-severity
+    failure, `isReadyForChatgpt` went false while `isReadyForClaudeai` stayed
+    true, matching the check's `platforms: ["chatgpt"]`.
+36. **A squash-merge would have silently invalidated the demo.** If the break PR
+    had been squashed or rebased, its commit would not be an ancestor of main,
+    the revert branch's merge base would stay behind, and `index.ts` would
+    resolve in main's favour — **the revert PR merges green while production
+    stays red**. Found by an evaluator before the break was pushed. When a later
+    PR must undo an earlier one, the earlier one is merged with a merge commit.
+37. **A revert PR is not a way back until it has a verdict.** `verdict` fails
+    closed and a revert of source is not docs-only, so an open revert PR with no
+    verdict in its body is a red required check. Author the break and its revert
+    together, evaluate both before either is pushed, and open both PRs before
+    merging the break. Under `strict_required_status_checks_policy` the revert
+    still goes out of date once the break lands, so budget the admin bypass
+    rather than waiting on a re-evaluation while production is red.
+38. **A guard can freeze a proposal it was never meant to cover.** With
+    `.tests-locked` on main, a test file locks the moment it is *committed on any
+    branch* — `ls-files ∪ ls-tree HEAD`. The proposal rule from PR #21 permits
+    creating an unapproved test, not revising one, so an evaluator's findings
+    about a proposed test could not be applied. Do not commit a proposed test
+    file until its evaluation returns; re-authoring on a branch cut fresh from
+    `origin/main` is the escape if you already have.
+39. **State a bound at one scope, and recompute it.** The paragraph bounding
+    correction 34 declared "96 check-records" and then gave per-capture counts,
+    so "populated on the rest" resolved to 65 of 96 against a true figure of 4 —
+    sixteen-fold, in the exact direction the paragraph existed to rule out. It
+    was wrong twice the same way. A bound that states its components and their
+    total makes drift visible as arithmetic instead of asking the reader to
+    trust a summary.
+40. **`git revert` is refused here; prove exactness instead.** The command is
+    blocked by machine-level settings outside this repository. The property it
+    was chosen for is exactness, and identical tree SHAs prove that more directly
+    — a `git revert` with a hand-resolved conflict is not guaranteed exact, a
+    matching tree hash is.
 
 ## Invariants
 
