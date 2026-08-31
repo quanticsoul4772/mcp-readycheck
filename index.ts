@@ -164,7 +164,7 @@ const getAuditDefinition = {
   annotations: {
     readOnlyHint: true,
     destructiveHint: false,
-    openWorldHint: true,
+    openWorldHint: false,
   },
 } satisfies ToolDefinition;
 
