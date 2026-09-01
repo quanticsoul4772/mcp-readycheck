@@ -10,7 +10,7 @@ own deployed URL and renders the result by category. The app is its own test cas
 | dev | `npm run dev` — serves `/mcp` on :3000, Inspector at `/mcp/inspector`. Backgrounded, it detaches; stop it by killing the node process, not just the shell. |
 | build | `npm run build` → `.mcp-use/build/index.js` |
 | typecheck | `npm run typecheck` (regenerates `mcp-env.d.ts`, then `tsc`) |
-| test | `npm test` — `node --test` over `tests/**/*.test.ts`, no test framework dependency. The hook suites are separate: `sh .claude/hooks/*.test.sh` |
+| test | `npm test` — `node --test` over `tests/**/*.test.ts`, no test framework dependency. **`npm run test:pure`** needs no network and no key, and is what CI runs; **`npm run test:live`** POSTs real audits and needs `MANUFACT_API_KEY`. Adding a test file means adding it to one of those two, or it runs under `npm test` alone and never in CI. The hook suites are separate: `sh .claude/hooks/*.test.sh` |
 | deploy | `npx -y mcp-use@latest deploy -y` (GitHub-connected). Never run it to "check something". |
 
 ## Stack facts
@@ -461,18 +461,35 @@ lint or a hook.
   `test:pure` is in the job now. When a job is named for speed, check what it
   actually asserts before trusting it as a gate.
 - **Live tests never run in CI, and that is deliberate.** `test:live` POSTs real
-  audits against the deployed server. Putting it in a workflow would mean a
-  `MANUFACT_API_KEY` secret readable by every workflow run — including on a
-  fork's pull request — and a billed audit record created by every push. The
-  split is `test:pure` (mapper, schema, view transforms, capture consistency —
-  no network, no key) and `test:live` (the Manufact API). Verified by execution:
-  with the key unset, `test:pure` is 25/25 and `test:live` fails five tests with
-  `MissingApiKeyError`. That asymmetry is the proof the split is real rather
-  than cosmetic; re-run it if the classification is ever changed.
-  Residual: both scripts enumerate files explicitly, so a *new* test file runs
-  under `npm test` but under neither subset until it is added to one. `npm test`
-  still runs the full glob, which is what stops a new file being silently
-  skipped everywhere.
+  audits against the deployed server, so every push would create a billed audit
+  record, and the workflow would need `MANUFACT_API_KEY` in its environment.
+  (An earlier draft of this entry also claimed the secret would be "readable on
+  a fork's pull request". That is wrong: GitHub withholds repository secrets
+  from fork `pull_request` runs — the exposure needs `pull_request_target`,
+  which no workflow here uses. The billed-record reason stands on its own.)
+  The split is `test:pure` (view transforms, tool-definition assertions, error
+  mapping, capture consistency) and `test:live` (the Manufact API). Verified by
+  execution: with the key unset, `test:pure` is 25/25 and `test:live` fails five
+  tests with `MissingApiKeyError`. An evaluation went further and re-ran
+  `test:pure` under a preload that throws on any non-local DNS lookup — still
+  25/25, while the same preload fired five times on `cloud.manufact.com` against
+  `test:live`. The no-network property is proven, not assumed; re-run that if
+  the classification ever changes.
+- **`test:pure` does not cover `lib/audit-schema.ts`, and the split is at file
+  granularity.** `mapAuditResponse` and `auditOutputSchema` are exercised only
+  in `tests/readiness-tool.test.ts`, which is the live file, so the mapper has
+  **zero CI coverage**. A regression that stringifies `hint` or drops
+  `errorMessage` — both defects this repo has actually shipped — passes
+  `typecheck`, `build` and `test:pure`, and `fast-checks` goes green. The two
+  tests that would catch it need no key and no network; they simply live in the
+  wrong file, and `.tests-locked` forbids moving them. Six other key-free
+  assertions in that file are stranded the same way.
+  Two residuals of the same shape, both wider than they look: the scripts
+  enumerate files explicitly, and **no CI job runs the full glob**, so a PR
+  adding `tests/foo.test.ts` goes green with that file never executed — and
+  `tests-guard.sh` deliberately permits creating a new unapproved test file, so
+  that is a reachable path rather than a hypothetical. A default-include layout
+  (`tests/live/` for the live suite, a glob for everything else) closes both.
 - **A revert branch cut from a squash-merged commit is a no-op merge.** If the
   commit being undone was squashed or rebased onto the default branch, it is not
   an ancestor of it. The revert branch's merge base stays behind, the three-way
@@ -480,5 +497,8 @@ lint or a hook.
   merges **green while changing nothing** — reporting success against a state it
   did not fix. When a later PR must undo an earlier one, merge the earlier one
   with a merge commit, and check `git merge-base --is-ancestor <commit> main`
-  before relying on the revert. STAGE-PLAN correction 36 records the instance;
-  this is the general rule.
+  before relying on the revert. The mechanism was derived and confirmed, not
+  observed: STAGE-PLAN correction 36 records a **near-miss**, caught by an
+  evaluator before the break was pushed, and `git merge-base --is-ancestor
+  e181bd6 main` returns true because PR #27 was merged with a merge commit. No
+  no-op merge ever occurred here. The rule is preventive.
