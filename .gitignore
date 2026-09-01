@@ -67,3 +67,6 @@ PROGRESS.md
 # happen again even if some future revision reintroduces the file.
 .tests-locked.testbak
 /tmp/
+
+# Crash dumps from Git Bash binaries; the Stop hook would otherwise commit them.
+*.stackdump
