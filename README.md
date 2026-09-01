@@ -102,16 +102,16 @@ regenerates:
 
 | | |
 |---|---|
-| goals completed before this one | 5 |
-| pull requests opened | 36 |
-| merged | 35 |
+| goals recorded in the stage plan | 6 |
+| pull requests opened | 37 |
+| merged | 36 |
 | merged over a red required check | 5 — #10, #11, #21, #28, #32 |
 | merged over a live evaluator BLOCK | **2** — #8 and #10 (see below) |
 | merged before the gate existed | 9 |
-| passed the gate carrying a verdict | 15 |
+| passed the gate carrying a verdict | 16 |
 | passed by the `[docs]` exemption, carrying none | 6 |
-| went red, then green once the verdict was added | 7 |
-| corrections in the stage plan | 44 |
+| went red, then green once the verdict was added | 8 |
+| corrections in the stage plan | 51 |
 | entries in the mistake log | 57 |
 
 Where those rows come from, since they do not all come from one place:
@@ -127,8 +127,8 @@ Where those rows come from, since they do not all come from one place:
   row is a claim with its evidence linked, and the fixture says so where it is
   set.
 
-Five goals produced that record — G1 through G5, each named in the stage plan,
-each ending at a human merge. This submission is the sixth.
+Six goals produced that record — G1 through G6, each named in the
+stage plan, each ending at a human merge. This submission is the last of them.
 
 **[PR #8](https://github.com/quanticsoul4772/mcp-readycheck/pull/8) merged 72
 seconds before its BLOCK arrived**, shipping three defects. **[PR
@@ -137,14 +137,18 @@ BLOCK on its head commit**, recorded in
 [#11](https://github.com/quanticsoul4772/mcp-readycheck/pull/11)'s own body. The
 gate exists because of the first; it did not stop the second.
 
-Seven merges went red before going green, for two reasons rather than one. Most
+Eight merges went red before going green, for two reasons rather than one. Most
 were opened before their evaluation finished, and the fix is ordering: evaluate,
 then push and open with the verdict already in the body. But PR #12 and PR #14
 went red for a different reason — a verdict binds to a head commit, and merging
 main into the branch moves that head, so a valid approval stops applying. On #12
 the approval named `399fa5a` and the head had become `815d866`. Ordering does not
 prevent that one; budgeting a re-evaluation after any merge into the branch does.
-Both are in the mistake log as separate entries.
+And #37 — the pull request carrying this README — went red for a third reason:
+its final evaluation returned BLOCK, the findings were fixed, and fixing them
+moved the head past the commit the verdict named. Evaluating before pushing is
+not sufficient; the commit must also stop moving afterwards. All three are in the
+mistake log as separate entries.
 
 ### The guard marathon
 

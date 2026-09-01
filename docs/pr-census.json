@@ -1,13 +1,13 @@
 {
   "regenerateWith": "node scripts/pr-census.mjs > docs/pr-census.json",
   "note": "A pull request's gate result is its LATEST verdict check run. Taking the first inverts seven of them, because a PR opened before its verdict is in the body goes red and then green when the body is edited.",
-  "prsOpened": 36,
-  "merged": 35,
+  "prsOpened": 37,
+  "merged": 36,
   "closedUnmerged": [
     24
   ],
   "open": [],
-  "mergedGatePassed": 21,
+  "mergedGatePassed": 22,
   "mergedGatePassedCarryingVerdict": [
     12,
     13,
@@ -23,7 +23,8 @@
     31,
     34,
     35,
-    36
+    36,
+    37
   ],
   "mergedGatePassedByDocsExemption": [
     15,
@@ -58,14 +59,15 @@
     16,
     18,
     19,
-    20
+    20,
+    37
   ],
   "mergedOverLiveBlock": [
     8,
     10
   ],
-  "approvingVerdictObjects": 18,
-  "prsCarryingAnApprovingVerdict": 17,
+  "approvingVerdictObjects": 19,
+  "prsCarryingAnApprovingVerdict": 18,
   "blockVerdictObjects": [
     {
       "pr": 24,

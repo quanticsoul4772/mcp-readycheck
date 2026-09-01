@@ -47,6 +47,12 @@ renders the real result, and the fail-to-green cycle is reproducible.
 | 11 | Staged one-line failure, red to green | complete (G4): `docs/demo/`, red `5309c70b` → green `a8c78006` |
 | 12 | Autofix trigger surfacing the PR link (optional) | probed (G5): autofix declined to fix the SDK gap, no PR — `docs/demo/autofix-probe.md` |
 | — | CI actually runs tests (`test:pure`), test split | complete (G5) |
+| — | Test discovery replaces enumeration; `test:check` in CI | complete (G6 S0): PRs #34, #35 |
+| — | Submission package — README, ledger, census, 17 tests | complete (G6 S3): PR #37 |
+
+**The plan is complete.** Post-merge audit `6262a04a` against production returns
+32 checks, 31 passing, both readiness flags true, and **zero deviations** from the
+`f4022c88` baseline — run through the deployed tools rather than the API.
 
 Stages 8 onward run the operating cycle: issue with Default-FAIL criteria →
 plan file → **Gate A** → `.tests-locked` → TDD → evaluator → CI → **Gate B**.
@@ -327,6 +333,68 @@ stages that follow.
 - The widget performs no network calls.
 - `outputSchema` and returned `structuredContent` stay in lockstep.
 - Every stage leaves `main` deployable.
+
+## Corrections added by G6
+
+45. **A guard that reads a file as text will be defeated by that file's own
+    grammar.** Assertion 4 of `test:check` — "does CI still run the discovery
+    check" — went through six versions, five of them rewrites. Every version that scanned `ci.yml` for
+    `run:` values fell to YAML that Actions interprets differently from a
+    scanner: a second job under `if: ${{ false }}`, a step-level `if:`,
+    `continue-on-error: true`, then those two keys quoted, `${{ true }}` and
+    `True` as values, a four-space job body, and `run: … || true` whose failure
+    the shell swallows. Each fix pinned the spelling the last evaluation
+    reported rather than the class behind it. The end state pins the whole job
+    verbatim and digests the file, because an exact comparison has no grammar to
+    be wrong about. Reading YAML correctly needs a parser, and a parser is a new
+    dependency a human approves.
+46. **The first fail-open blind spot is the one that matters.** Everything
+    disclosed about that assertion's limits was fail-closed — the required check
+    never reports, the pull request stays blocked. Then an evaluation found
+    `defaults: run: shell: cat {0}` above `jobs:`, which makes every step in the
+    pinned job print its script and exit 0 with all 21 pinned lines
+    byte-identical. Listing only fail-closed limits had implied that a green
+    check meant the steps ran. Sort a blind-spot list by which way it fails, not
+    by how likely it looks.
+47. **A test that passes for the wrong reason is worse than one that fails.**
+    Three separate assertions in `tests/submission.test.ts` were vacuous:
+    `new RegExp` built inside a template literal has its backslashes eaten, and
+    `|\s*checks\s*\|\s*32\s*\|` becomes `|s*checkss*|s*32s*|`, an
+    alternation with empty branches that matches any string including `""`. A
+    line-based bullet scanner silently dropped the one entry that wraps, with
+    its `>= 5` floor set to exactly the broken count. And an autofix check
+    skipped any figure the README changed, so editing a number deleted its own
+    test. Prove an assertion by mutating what it guards; thirty-three mutations
+    caught is the evidence, not a green suite.
+48. **A count recalled is a count wrong.** The BLOCK figure was stated as four
+    across eleven rounds; it was six across thirteen. PR #34's merged body
+    undercounts its own chain twice, as "Nine rounds. Three BLOCKs." and "Ten
+    evaluation rounds: 4 BLOCK, 6 APPROVE-WITH-NOTES", where the ledger shows
+    ten and five. Both were written from memory. `docs/evaluations.md` exists so
+    the number is read off a table, and the README states the ledger is
+    author-written — evidence that an evaluation happened, never that it was
+    honest.
+49. **The flattering error survives the act of correcting itself.** The PR
+    census was measured four times and wrong three: a fabricated verdict counted
+    as a real BLOCK, `APPROVE-WITH-NOTES` dropped from an approving count,
+    figures taken before a merge landed, and a red-then-green count that asked
+    "more than one run" instead of "first failed, last passed". Separately, an
+    exculpatory "bootstrap exemption" was invented for #10 and #11 — and #10 had
+    merged over a live evaluator BLOCK, recorded in #11's own body. There are
+    two such merges, not one.
+50. **Provenance is a claim like any other.** The README credited Phase 0, before
+    any feature, with the required verdict check and a frozen test list. Neither
+    existed then: `verdict.yml` arrived in #10 *after* #8 merged 72 seconds ahead
+    of its BLOCK, and `.tests-locked` arrived in #19, two features later. One
+    `git log --diff-filter=A` falsifies each. The sentence claimed foresight
+    where the record shows reaction, at the head of the section whose purpose is
+    the opposite.
+51. **Evaluate, then push — and then do not edit.** Correction 31 says evaluate
+    before opening the pull request. G6 obeyed that and still put the operator in
+    front of a red required check, by fixing the final round's findings *after*
+    the verdict was issued: the head moved, no verdict named it, and the gate
+    refused. A verdict binds to a commit at both ends. Editing after it is the
+    same failure as pushing before it.
 
 ## Out of scope
 
