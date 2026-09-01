@@ -34,3 +34,14 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      # `test:pure` only. `test:live` POSTs real audits against the deployed
+      # server and needs MANUFACT_API_KEY, so it stays out of CI deliberately —
+      # see the mistake-log entry in AGENTS.md.
+      #
+      # Until G5 this job ran typecheck and build and nothing else, which is why
+      # G4's staged break sailed through CI green: `fast-checks` never executed a
+      # single test. The frozen suite caught that defect locally and the live
+      # audit caught it after deploy; CI caught it at no point.
+      - name: Test (pure)
+        run: npm run test:pure

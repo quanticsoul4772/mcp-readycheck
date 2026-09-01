@@ -454,3 +454,31 @@ lint or a hook.
   per line — `while IFS= read -r p` over a heredoc, which keeps the loop in the
   current shell so a refusal can still `exit 2`. Found by running the suite; the
   code read fine.
+- **CI ran no tests at all, and a staged break proved it.** `fast-checks` ran
+  `typecheck` and `build` and stopped there. G4's deliberate one-line defect
+  passed both and would have shipped green; the frozen suite caught it locally
+  and the live audit caught it after deploy, and CI caught it at neither end.
+  `test:pure` is in the job now. When a job is named for speed, check what it
+  actually asserts before trusting it as a gate.
+- **Live tests never run in CI, and that is deliberate.** `test:live` POSTs real
+  audits against the deployed server. Putting it in a workflow would mean a
+  `MANUFACT_API_KEY` secret readable by every workflow run — including on a
+  fork's pull request — and a billed audit record created by every push. The
+  split is `test:pure` (mapper, schema, view transforms, capture consistency —
+  no network, no key) and `test:live` (the Manufact API). Verified by execution:
+  with the key unset, `test:pure` is 25/25 and `test:live` fails five tests with
+  `MissingApiKeyError`. That asymmetry is the proof the split is real rather
+  than cosmetic; re-run it if the classification is ever changed.
+  Residual: both scripts enumerate files explicitly, so a *new* test file runs
+  under `npm test` but under neither subset until it is added to one. `npm test`
+  still runs the full glob, which is what stops a new file being silently
+  skipped everywhere.
+- **A revert branch cut from a squash-merged commit is a no-op merge.** If the
+  commit being undone was squashed or rebased onto the default branch, it is not
+  an ancestor of it. The revert branch's merge base stays behind, the three-way
+  merge resolves the file in the default branch's favour, and the revert PR
+  merges **green while changing nothing** — reporting success against a state it
+  did not fix. When a later PR must undo an earlier one, merge the earlier one
+  with a merge commit, and check `git merge-base --is-ancestor <commit> main`
+  before relying on the revert. STAGE-PLAN correction 36 records the instance;
+  this is the general rule.
