@@ -35,7 +35,7 @@ POST /api/v1/server-audits/{serverId}/audits/{auditId}/autofix
 
 Documented responses: `200` job enqueued or existing PR returned, `400`, `401`,
 `403`, `404`, `409` already running, `422` no connected repository or audit not
-fixable. The `200` schema carries `prUrl` and `prNumber` — the call really can
+fixable. The `200` schema carries `prUrl` and `prNumber` — the call can
 open a pull request, which is why it was checkpointed first.
 
 ## Response — verbatim
@@ -99,7 +99,7 @@ git commands and no remote branch, the supported reading is that the agent
 produced nothing to open a PR *from*, and the pipeline attempted the PR anyway.
 
 What that reading does **not** establish: whether the pipeline would have
-reported a clean "nothing to fix" had it checked before calling GitHub. The
+reported "nothing to fix" had it checked before calling GitHub. The
 observable outcome is a `failed` job whose error is a PR-creation error rather
 than a fix-impossible one. Anyone re-reading this should treat "autofix declined
 to invent a fix" as evidenced by the empty tool trace, and treat the error
@@ -134,8 +134,8 @@ production red window plus roughly three hours), whether the question is already
 answered, and the risk of manufacturing an artificial break that tests a
 different question than the one asked.
 
-The honest weakness in the recommendation: escalating would answer "can autofix
-fix a defect it *can* act on?", which this probe genuinely does not answer. It
+The weakness in the recommendation: escalating would answer "can autofix
+fix a defect it *can* act on?", which this probe does not answer. It
 lost on cost and on testing a different question, not because the question is
 uninteresting.
 

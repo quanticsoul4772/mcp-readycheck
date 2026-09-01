@@ -124,7 +124,7 @@ lint or a hook.
   `cat`, `grep`, `git diff` and running the suites all still work. Still open:
   an interpreter here-document that writes through its own file API
   (`python - <<'PY' ... open(".claude/hooks/x", "w") ... PY`). Detecting that
-  means reading the embedded program, which no regex does honestly.
+  means reading the embedded program, which no regex does.
 - **Split a command line on unquoted separators only.** The guard first cut the
   line on every `|`, which is also the delimiter people reach for in
   `sed -i 's|a|b|' file` once the pattern contains a slash. The filename landed
@@ -185,7 +185,7 @@ lint or a hook.
   the title. The third is not closed in code — the body is author-written — and
   rests on a human clicking merge, which is the attention that failed on PR #8.
   Treat the check as evidence that a verdict exists, never as evidence that it
-  is honest.
+  is correct.
 - **Tightening this gate has broken it twice; loosening it never has.** Two
   revisions of `verdict.yml` in a row refused work they should have allowed,
   and both were the same shape: **a branch that terminates where it should
@@ -326,7 +326,7 @@ lint or a hook.
   name). Resolve `.` and `..`, normalise separators, reduce to repo-relative,
   lower-case, then compare against `ls-files` ∪ `ls-tree HEAD`. Anything that
   will not resolve and still looks like a test is refused. On a case-sensitive
-  filesystem this refuses a genuinely distinct file whose name differs only in
+  filesystem this refuses a distinct file whose name differs only in
   case — a fail-closed trade taken deliberately, because this repo lives on
   NTFS, where those names are one file.
 - **Two spellings of one root, and one backslash written as two.** `/d/Projects/x`
@@ -336,7 +336,7 @@ lint or a hook.
   source through verbatim, so `.replace(/\\\\/g, "/")` compiles to a regex
   matching *two* backslashes and silently leaves a Windows path unconverted.
   Write `/\\/g`. Both bugs presented identically — "cannot resolve" on a path
-  that was obviously inside the repo.
+  that was inside the repo.
 - **Lower-case before classifying, not only before looking up.** Round 2 of the
   same evaluation refused the two case-variant strings round 1 had reported and
   allowed the rest of the class: `TRACKED`/`is_tracked` were lower-cased, but
@@ -411,7 +411,7 @@ lint or a hook.
   false for this one: `.tests-locked.testbak` was never ignored. It is now.
 - **A suite that parks the guard's own switch must restore it on every exit
   path.** Superseded by the entry above — kept because the reasoning is still
-  right for anything that genuinely must park state. `tests-guard.test.sh` moved the real `.tests-locked` aside, wrote a
+  right for anything that must park state. `tests-guard.test.sh` moved the real `.tests-locked` aside, wrote a
   fake over it, and restored at the end — with no `trap`. The guard's first line
   is `[ -f "$MARKER" ] || exit 0`, so any interruption in that window left the
   repository silently unlocked, every locked test editable by plain `Write`, and
@@ -564,7 +564,7 @@ lint or a hook.
   *because* of one, so a test asserting `1 + 1 === 3` was named in LIVE and ran
   in no CI job with the check green. Draft 3 matched the string
   `MANUFACT_API_KEY` anywhere in the output, which a failing assertion message
-  can simply contain. Draft 4 matches the thrown `MissingApiKeyError` instead;
+  can contain. Draft 4 matches the thrown `MissingApiKeyError` instead;
   writing *that* into an assertion message still defeats it, and nothing here
   closes that. The commit that adds `scripts/run-tests.mjs` carries the same
   list in its message, with what each evaluation did to break it.
