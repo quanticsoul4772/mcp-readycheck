@@ -116,10 +116,17 @@ describe("G6 — the submission README", () => {
   });
 
   // AC1 — every relative link resolves
+  // AC1 — every relative link in BOTH documents resolves, each from its own
+  // directory. Checking only the README let four links move into docs/ with a
+  // `docs/` prefix still on them, resolving to docs/docs/ and 404ing.
   it("AC1 every relative link resolves", () => {
-    const links = [...README.matchAll(/\]\((?!https?:)([^)#]+)\)/g)].map((m) => m[1]);
-    assert.ok(links.length > 0, "no relative links found");
-    for (const l of links) assert.ok(existsSync(join(ROOT, l)), `missing: ${l}`);
+    for (const [doc, dir] of [[README, "."], [PROCESS, "docs"]]) {
+      const links = [...doc.matchAll(/\]\((?!https?:)([^)#]+)\)/g)].map((m) => m[1]);
+      assert.ok(links.length > 0, `no relative links found in ${dir} — the scan is broken`);
+      for (const l of links) {
+        assert.ok(existsSync(join(ROOT, dir, l)), `missing from ${dir}/: ${l}`);
+      }
+    }
   });
 
   // AC2 — the self-audit figures come from the capture.

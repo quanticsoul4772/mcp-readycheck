@@ -9,7 +9,7 @@ those two commit timestamps.
 
 Phase 0 built a floor before any feature, and it was smaller than the floor
 standing today. What it actually contained is
-[stage 7 of the plan](docs/plans/STAGE-PLAN.md): PreToolUse guards, agent
+[stage 7 of the plan](plans/STAGE-PLAN.md): PreToolUse guards, agent
 definitions, settings, and AGENTS.md — plus an evaluator that reviews every diff
 in fresh context against a Default-FAIL rubric.
 
@@ -31,7 +31,7 @@ draft of this section claimed both as pre-feature foresight. An evaluation caugh
 it.
 
 The record, as of this commit and computed from
-[`docs/pr-census.json`](docs/pr-census.json), which the command in that file
+[`docs/pr-census.json`](pr-census.json), which the command in that file
 regenerates:
 
 | | |
@@ -113,7 +113,7 @@ times, twice committed by a Stop hook.
 
 ### Defects found by evaluation versus by the author
 
-Recorded per round in [`docs/evaluations.md`](docs/evaluations.md). The ledger is
+Recorded per round in [`docs/evaluations.md`](evaluations.md). The ledger is
 written by this project, not by an independent party — treat it as evidence that
 an evaluation happened, never as evidence that its findings were complete, which is the same
 caution AGENTS.md gives about the verdicts in pull request bodies.
@@ -154,7 +154,7 @@ the tests covered, closing with **"All five were caught by an evaluator, not by 
 
 ## Known residuals
 
-- [ADR-0003](docs/decisions/ADR-0003-guard-residuals.md) — five accepted
+- [ADR-0003](decisions/ADR-0003-guard-residuals.md) — five accepted
   residuals in the write-guard and `integrity.sh` layer. An attester cannot
   attest itself; that limit ends at a human reading the diff.
 - CI coverage has holes, enumerated in AGENTS.md with the units named. Some code
