@@ -488,7 +488,7 @@ lint or a hook.
   | `humanError` — 429, 5xx, generic, non-API branches | never executed |
   | `views/audit-report/report.ts` | 100% lines, 100% funcs |
 
-  The first five rows are reached by `tests/readiness-tool.test.ts` — under
+  The first four rows are reached by `tests/readiness-tool.test.ts` — under
   `test:live`, `index.ts` is 100% lines and `audit-schema.ts` is 100/100/100 —
   so a regression that stringifies `hint` or drops `errorMessage` (both defects
   this repo has actually shipped) passes `typecheck`, `build` and `test:pure`
@@ -507,23 +507,41 @@ lint or a hook.
   `test:live` is 16/16, `fast-checks` is green, and no test anywhere executes
   that line.
 
-  The tests that would catch these need no key and no network. They live in the
-  wrong file, and `.tests-locked` forbids moving them — six key-free assertions
-  are stranded there. Routing around the lock to raise a coverage number is the
-  exact behavior the lock exists to make visible, so they stay put and are
-  recorded here instead.
+  Some tests that would catch these need no key and no network, but live in the
+  wrong file, and `.tests-locked` forbids moving them. **Four** are meaningful
+  key-free assertions. Six *pass* keyless, but two of those (T7, T8) only
+  short-circuit at `requireApiKey` — measured at 0.26 ms and 0.20 ms keyless
+  against 1085.9 ms and 862.7 ms keyed — and their assertions (`isError` true,
+  non-empty text) are satisfied by `MissingApiKeyError` exactly as well as by
+  the 404 they were written for. Moving all six would put two tests in CI that
+  assert nothing about the absent-id handling they exist to cover, while looking
+  like they do. Routing around the lock to raise a coverage number is the exact
+  behavior the lock exists to make visible, so they stay put and are recorded
+  here instead.
 
   `views/audit-report/view.tsx` is covered by nothing in either suite. That is
   the pre-existing no-DOM limitation, not a consequence of this split.
 
-  **This entry took three evaluation rounds to get right, and all three of my
-  errors ran the same direction — toward implying more coverage than exists.**
-  First it claimed `test:pure` covered the mapper (it covers none of it). Then
-  it named the mapper as the only hole (it is the largest of six). Then it
-  attributed every hole to the live suite, when the `humanError` branches are
-  covered by nothing. An entry whose purpose is to stop a reader trusting a
-  green check kept overstating what the checks assert. When writing about
-  coverage, measure each claim separately; the plausible sentence is the
+  **This entry took five evaluation rounds, and every one of my errors ran the
+  same direction — toward implying more coverage than exists.**
+
+  1. Claimed `test:pure` covered the mapper. It covers none of it.
+  2. Named the mapper as the only hole. It is the largest of six.
+  3. Attributed every hole to the live suite. The `humanError` branches are
+     covered by nothing.
+  4. Wrote "the first **five** rows are reached by the live file" — in the
+     sentence correcting (3). Row five *is* the `humanError` row, so the entry
+     contradicted itself two paragraphs apart, in the reassuring direction.
+  5. Said "six key-free assertions are stranded". Six pass keyless; only four
+     assert anything without a key.
+
+  Four of the five were caught by an evaluator, not by me, and (4) was written
+  while fixing (3) — the error survived the act of correcting itself. An entry
+  whose whole purpose is to stop a reader trusting a green check kept
+  overstating what the checks assert.
+
+  When writing about coverage: measure each claim separately and count against
+  the artifact rather than summarizing it. The plausible sentence is the
   reassuring one, and it is the one that will be wrong.
   Two residuals of the same shape, both wider than they look: the scripts
   enumerate files explicitly, and **no CI job runs the full glob**, so a PR
