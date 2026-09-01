@@ -184,9 +184,14 @@ the flattering one.
 
 From PR #21 onward, correction 31 requires evaluating before pushing, so a BLOCK
 is resolved locally and the PR opens carrying the eventual approval. S0 alone
-produced four BLOCKs across eleven rounds, and none of them is a verdict object
-in any PR body — though PR #34's body states in prose that it took four, which
-is the qualifier doing its work rather than an exception to it.
+produced six BLOCKs across thirteen rounds — ten on PR #34 of which five were
+BLOCKs, three on PR #35 of which one was — and none of them is a verdict object
+in any PR body. PR #34's body does state in prose that it took BLOCKs, which is
+the qualifier doing its work rather than an exception to it. That body also
+undercounts its own chain as "4 BLOCK, 6 APPROVE-WITH-NOTES" where the ledger
+shows five and five; it is merged and cannot be edited into truth, so the README
+states the ledger's figure and notes the discrepancy rather than quietly using
+the smaller number.
 
 That rule did not exist for PRs #1–#20, so it cannot explain their zero. What
 explains part of it is that **two BLOCKs were not honoured**: PR #8 merged 72
@@ -202,7 +207,10 @@ the count has to come from somewhere else and why the README says where.
 | count from session transcripts | no — outside the repo | yes |
 
 **Chosen: the ledger, with its weakness stated in the README itself.**
-`docs/evaluations.md` lists every evaluation round with its commit and verdict;
+`docs/evaluations.md` lists every evaluation round with its commit and verdict,
+and S3 builds it before the README so the README's figure is read off a table
+rather than recalled. Doing it the other way round is how PR #34's body came to
+undercount its own chain;
 the suite asserts the README's number equals the ledger's row count. That makes
 the number computed and the record complete. It does not make the ledger true —
 it is author-written, exactly like the PR-body verdicts AGENTS.md already says
