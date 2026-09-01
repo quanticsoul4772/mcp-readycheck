@@ -415,8 +415,8 @@ describe("G6 — the submission README", () => {
     }
     assert.ok(labels.size > 0, "found no goal labels — the scan is broken, not the plan");
     const rows = tableRows();
-    assert.equal(rows.get("goals completed before this one"), labels.size,
-      `README says ${rows.get("goals completed before this one")}, STAGE-PLAN names ${labels.size}`);
+    assert.equal(rows.get("goals recorded in the stage plan"), labels.size,
+      `README says ${rows.get("goals recorded in the stage plan")}, STAGE-PLAN names ${labels.size}`);
   });
 
 });
