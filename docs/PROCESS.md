@@ -5,6 +5,76 @@ From the scaffold commit `ab5ffc9` (2026-08-30T09:59:02-07:00) to `87131cc`
 closing the staged-failure demo: **28 hours and 33 minutes**, computed from
 those two commit timestamps.
 
+## The app
+
+It is its own test case: the server you audit with it is the server serving it.
+
+Views are pure-render — every network call happens server-side in the handler, or
+the app trips its own CSP check.
+
+Types are checked with `npm run typecheck`, which regenerates `mcp-env.d.ts`
+before running `tsc`. `npm run test:check` verifies discovery against the git
+index, against the npm scripts, and against the CI job.
+
+## Audits
+
+The self-audit, against the baseline capture:
+
+Audit [`f4022c88`](demo/baseline-f4022c88.json), the current baseline:
+
+| | |
+|---|---|
+| checks | 32 |
+| passing | 31 |
+| failing | 1, severity `warning` |
+| `isReadyForChatgpt` | **true** |
+| `isReadyForClaudeai` | **true** |
+
+Severity gates readiness and warnings do not, so both flags are true with one
+check red.
+
+### The staged-failure demo
+
+[`docs/demo/README.md`](demo/README.md) — a one-line defect was shipped to
+production deliberately, the app's own audit caught it, and the revert restored
+the baseline. Both audits are captured.
+
+| | audit | `isReadyForChatgpt` |
+|---|---|---|
+| broken | [`5309c70b`](demo/audit-red.json) | **false** |
+| reverted | [`a8c78006`](demo/audit-green.json) | true |
+
+`isReadyForClaudeai` stayed `true` on both. The break moved one flag, not both.
+
+Break: [#27](https://github.com/quanticsoul4772/mcp-readycheck/pull/27) ·
+revert: [#28](https://github.com/quanticsoul4772/mcp-readycheck/pull/28)
+
+## The one red check
+
+`tool-resource-metadata-complete` — "1 resource(s) have incomplete metadata",
+scope `view`, on `ui://views/audit-report.html`. Its hint says to set the widget
+description in `widgetMetadata`, or `_meta.ui.widgetDescription`.
+
+Neither string appears in any file of mcp-use 2.3.3. `buildResourceUiMeta` emits
+exactly `csp`, `permissions`, `domain` and `prefersBorder`. There is no code path
+in this repository that can satisfy the check.
+
+That is this repository's conclusion. It is also **Manufact's own conclusion**.
+[The autofix probe](demo/autofix-probe.md) POSTed Manufact's autofix at this
+exact failure. It returned 200, ran a coding agent with repository access
+for 6 minutes 48 seconds over 200 events, called `Bash` 87 times and `Read`
+twice, made **zero** `Edit`/`Write` calls and **zero** git mutations, and
+recorded, in its own words:
+
+> neither `widgetMetadata` nor `openai/widgetDescription` appears in the mcp-use
+> package. This means the mcp-use 2.3.3 framework doesn't have first-class
+> support for `openai/widgetDescription`.
+
+A different agent, reasoning from the code, reached the finding this project had
+recorded two goals before the probe ran, in G3. What the probe does **not** show is autofix fixing
+something and opening a merged pull request; producing that would have meant
+breaking production on purpose to create a defect it could fix.
+
 ## The process, and what it cost
 
 Phase 0 built a floor before any feature, and it was smaller than the floor

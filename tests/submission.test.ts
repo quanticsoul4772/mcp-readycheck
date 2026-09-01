@@ -107,10 +107,15 @@ function tableRows(doc = README) {
 }
 
 describe("G6 — the submission README", () => {
-  // AC1 — no scaffold text
+  // AC1 — no scaffold text. Only one string left this list: the dev inspector
+  // URL, which the rewritten README documents under Usage as a fact about
+  // `npm run dev`. `create-mcp-use-app` and "bootstrapped with" appear nowhere in
+  // either document, so they stay — dropping them would stop catching scaffold
+  // boilerplate re-pasted in any wording but the one exact sentence below.
   it("AC1 no scaffold text", () => {
-    for (const s of ["create-mcp-use-app", "bootstrapped with", "## Getting Started",
-                     "## Learn More", "localhost:3000/mcp/inspector"]) {
+    for (const s of ["# MCP Server built with mcp-use", "create-mcp-use-app",
+                     "bootstrapped with", "## Getting Started", "## Learn More",
+                     "You can start building by editing"]) {
       assert.ok(!README.includes(s), `scaffold text present: ${s}`);
     }
   });
@@ -138,11 +143,11 @@ describe("G6 — the submission README", () => {
   // own header warned about exactly this and it happened anyway.
   it("AC2 self-audit figures match baseline-f4022c88.json", () => {
     const d = cap("baseline-f4022c88.json");
-    const rows = tableRows();
+    const rows = tableRows(PROCESS);
     assert.equal(rows.get("checks"), d.checks.length);
     assert.equal(rows.get("passing"), d.checks.filter((c) => c.status === "pass").length);
 
-    const cells = textCells();
+    const cells = textCells(PROCESS);
     const failing = cells.get("failing");
     assert.ok(failing, "no `failing` row");
     const bad = d.checks.filter((c) => c.status !== "pass");
@@ -158,14 +163,70 @@ describe("G6 — the submission README", () => {
     }
   });
 
+  // AC2 — the README's Status block is read out of the committed capture, and
+  // the Node floor out of package.json. Both were typed and unasserted when the
+  // README moved to the standard structure.
+  it("AC2 the Status block matches docs/demo/audit-post-g6.json", () => {
+    const d = cap("audit-post-g6.json");
+    const pass = d.checks.filter((c) => c.status === "pass").length;
+    const bad = d.checks.filter((c) => c.status !== "pass");
+    const status = README.slice(README.indexOf("## Status"), README.indexOf("## Deploy"));
+    assert.ok(status.length > 0, "no Status section — the scan is broken");
+    assert.ok(status.includes(d.auditId.slice(0, 8)), `Status must name audit ${d.auditId.slice(0, 8)}`);
+    assert.ok(status.includes(`${d.checks.length} checks`), `Status must state ${d.checks.length} checks`);
+    assert.ok(status.includes(`${pass} passing`), `Status must state ${pass} passing`);
+    assert.equal(d.isReadyForChatgpt, true);
+    assert.equal(d.isReadyForClaudeai, true);
+    assert.ok(status.includes("`isReadyForChatgpt` true"), "Status must state the ChatGPT flag");
+    assert.ok(status.includes("`isReadyForClaudeai` true"), "Status must state the Claude flag");
+    assert.equal(bad.length, 1);
+    assert.ok(status.includes(bad[0].checkId), `Status must name ${bad[0].checkId}`);
+
+    const pkg = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
+    const floor = (pkg.engines?.node ?? "").replace(/[^0-9.]/g, "");
+    assert.ok(floor.length > 0, "package.json declares no node engine");
+    assert.ok(README.includes(`Node ${floor} or later`), `README must state Node ${floor}`);
+
+    // The SDK version in the Status paragraph is the pinned dependency.
+    const dep = (pkg.dependencies?.["mcp-use"] ?? "").replace(/[^0-9.]/g, "");
+    assert.ok(dep.length > 0, "package.json pins no mcp-use version");
+    assert.ok(status.includes(`mcp-use ${dep}`), `Status must state mcp-use ${dep}`);
+
+    // The screenshot's alt text carries the same check count as the capture. It
+    // is the one figure in the README that no reader can see is stale, because
+    // the image beside it does not change when the deployment does.
+    const alt = README.match(/!\[([^\]]+)\]\(docs\/demo\/[^)]+\)/);
+    assert.ok(alt, "no screenshot with alt text");
+    assert.ok(alt[1].includes(`${d.checks.length} checks`),
+      `alt text must state ${d.checks.length} checks, has: ${alt[1]}`);
+  });
+
+  // The README was restructured twice, and both times sentences were dropped
+  // rather than moved. These are the ones that went missing; asserting them is
+  // what makes "moved verbatim" checkable instead of a claim in a commit message.
+  it("the sentences removed from the README are in docs/PROCESS.md", () => {
+    for (const sentence of [
+      "It is its own test case: the server you audit with it is the server serving it.",
+      "Views are pure-render",
+      "the app trips its own CSP check",
+      "Severity gates readiness and warnings do not",
+      "The break moved one flag, not both.",
+    ]) {
+      assert.ok(norm(PROCESS).includes(norm(sentence)),
+        `removed from the README and now in neither document: ${sentence.slice(0, 50)}`);
+    }
+  });
+
   // AC3 — the red check is named and the probe is cited
   it("AC3 red check named, probe cited", () => {
     const d = cap("baseline-f4022c88.json");
     const bad = d.checks.find((c) => c.status !== "pass");
     assert.ok(README.includes(bad.checkId), `README must name ${bad.checkId}`);
-    assert.ok(README.includes(bad.severity), "severity not stated");
-    assert.ok(README.includes("docs/demo/autofix-probe.md"), "probe not linked");
-    assert.ok(README.includes("widgetMetadata"), "the unsatisfiable field not named");
+    assert.ok(PROCESS.includes(bad.checkId), `PROCESS must name ${bad.checkId}`);
+    assert.ok(PROCESS.includes(bad.severity), "severity not stated");
+    assert.ok(README.includes("docs/demo/autofix-probe.md"), "README must link the probe");
+    assert.ok(PROCESS.includes("demo/autofix-probe.md"), "PROCESS must link the probe");
+    assert.ok(PROCESS.includes("widgetMetadata"), "the unsatisfiable field not named");
   });
 
   // AC2 — the staged-failure captures
@@ -174,7 +235,7 @@ describe("G6 — the submission README", () => {
     assert.equal(red.isReadyForChatgpt, false);
     assert.equal(red.isReadyForClaudeai, true, "the break moved one flag only");
     assert.equal(green.isReadyForChatgpt, true);
-    assert.ok(README.includes(red.auditId.slice(0, 8)) && README.includes(green.auditId.slice(0, 8)));
+    assert.ok(PROCESS.includes(red.auditId.slice(0, 8)) && PROCESS.includes(green.auditId.slice(0, 8)));
   });
 
   // AC4 — the guard marathon entries exist in AGENTS.md, whitespace-collapsed
@@ -335,7 +396,7 @@ describe("G6 — the submission README", () => {
     const read = one(/`Read` ([0-9]+)/, "its Read count");
     const edits = one(/MultiEdit` calls\*\* \| \*\*([0-9]+)\*\*/, "its edit count");
 
-    const para = README.slice(README.indexOf("The autofix probe"));
+    const para = PROCESS.slice(PROCESS.indexOf("The autofix probe"));
     assert.ok(para.includes(elapsed), `README must state the probe's elapsed time (${elapsed})`);
     assert.ok(para.includes(`${events} events`), `README must state ${events} events`);
     assert.ok(para.includes("`Bash` " + bash), `README must state Bash ${bash}`);
@@ -349,7 +410,7 @@ describe("G6 — the submission README", () => {
     // The quoted conclusion is the whole point of the citation.
     const quote = "neither `widgetMetadata` nor `openai/widgetDescription` appears in the mcp-use";
     assert.ok(norm(probe).includes(norm(quote)), "the probe no longer carries the quote");
-    assert.ok(norm(README).includes(norm(quote)), "the README must quote it verbatim");
+    assert.ok(norm(PROCESS).includes(norm(quote)), "the record must quote it verbatim");
   });
 
   // The ledger's Totals must agree with the rows it summarises. Round 2 found
@@ -384,8 +445,8 @@ describe("G6 — the submission README", () => {
 
   // AC5 — the re-break decision
   it("AC5 re-break decision recorded", () => {
-    assert.ok(/does \*\*not\*\* show|does not show/.test(README),
-      "the README must state what the probe does not prove");
+    assert.ok(/does \*\*not\*\* show|does not show/.test(PROCESS),
+      "the record must state what the probe does not prove");
   });
 
 
