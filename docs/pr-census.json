@@ -1,0 +1,76 @@
+{
+  "regenerateWith": "node scripts/pr-census.mjs > docs/pr-census.json",
+  "note": "A pull request's gate result is its LATEST verdict check run. Taking the first inverts seven of them, because a PR opened before its verdict is in the body goes red and then green when the body is edited.",
+  "prsOpened": 36,
+  "merged": 35,
+  "closedUnmerged": [
+    24
+  ],
+  "open": [],
+  "mergedGatePassed": 21,
+  "mergedGatePassedCarryingVerdict": [
+    12,
+    13,
+    14,
+    16,
+    18,
+    19,
+    20,
+    22,
+    26,
+    27,
+    29,
+    31,
+    34,
+    35,
+    36
+  ],
+  "mergedGatePassedByDocsExemption": [
+    15,
+    17,
+    23,
+    25,
+    30,
+    33
+  ],
+  "mergedOverRedGate": [
+    10,
+    11,
+    21,
+    28,
+    32
+  ],
+  "mergedBeforeGateExisted": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+  ],
+  "redThenGreen": [
+    12,
+    13,
+    14,
+    16,
+    18,
+    19,
+    20
+  ],
+  "mergedOverLiveBlock": [
+    8,
+    10
+  ],
+  "approvingVerdictObjects": 18,
+  "prsCarryingAnApprovingVerdict": 17,
+  "blockVerdictObjects": [
+    {
+      "pr": 24,
+      "state": "CLOSED",
+      "title": "FABRICATED FOR GATE TEST — do not merge: verdict-case 3, a BLOCK must fail the check"
+    }
+  ]
+}
