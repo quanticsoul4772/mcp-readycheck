@@ -475,15 +475,36 @@ lint or a hook.
   25/25, while the same preload fired five times on `cloud.manufact.com` against
   `test:live`. The no-network property is proven, not assumed; re-run that if
   the classification ever changes.
-- **`test:pure` does not cover `lib/audit-schema.ts`, and the split is at file
-  granularity.** `mapAuditResponse` and `auditOutputSchema` are exercised only
-  in `tests/readiness-tool.test.ts`, which is the live file, so the mapper has
-  **zero CI coverage**. A regression that stringifies `hint` or drops
-  `errorMessage` — both defects this repo has actually shipped — passes
-  `typecheck`, `build` and `test:pure`, and `fast-checks` goes green. The two
-  tests that would catch it need no key and no network; they simply live in the
-  wrong file, and `.tests-locked` forbids moving them. Six other key-free
-  assertions in that file are stranded the same way.
+- **CI coverage has holes, and `lib/audit-schema.ts` is the largest, not the
+  only one.** Measured with `node --experimental-test-coverage` over
+  `test:pure`:
+
+  | unit | under `test:pure` |
+  |---|---|
+  | `lib/audit-schema.ts` — `mapAuditResponse`, `auditOutputSchema` | **funcs 0.00%** |
+  | `index.ts` — `getAuditHandler` | never executed |
+  | `lib/manufact.ts` — `createAudit`, `fetchAudit` | never executed |
+  | `startAuditHandler` success path, `manufactFetch` 2xx return | never executed |
+  | `humanError` — 429, 5xx, generic, non-API branches | never executed |
+  | `views/audit-report/report.ts` | 100% lines, 100% funcs |
+
+  All of those are reached only by `tests/readiness-tool.test.ts`, the live
+  file. So a regression that stringifies `hint` or drops `errorMessage` — both
+  defects this repo has actually shipped — passes `typecheck`, `build` and
+  `test:pure`, and `fast-checks` goes green. `getAuditHandler` deserves naming
+  beside the mapper: it is what the view calls on every refresh.
+
+  The tests that would catch these need no key and no network. They live in the
+  wrong file, and `.tests-locked` forbids moving them — six key-free assertions
+  are stranded there. Routing around the lock to raise a coverage number is the
+  exact behavior the lock exists to make visible, so they stay put and are
+  recorded here instead.
+
+  `views/audit-report/view.tsx` is covered by nothing in either suite. That is
+  the pre-existing no-DOM limitation, not a consequence of this split.
+
+  An earlier draft of this entry named only the mapper, which left a reader
+  thinking it was the whole hole.
   Two residuals of the same shape, both wider than they look: the scripts
   enumerate files explicitly, and **no CI job runs the full glob**, so a PR
   adding `tests/foo.test.ts` goes green with that file never executed — and
