@@ -507,8 +507,10 @@ lint or a hook.
   `test:live` is 16/16, `fast-checks` is green, and no test anywhere executes
   that line.
 
-  Some tests that would catch these need no key and no network, but live in the
-  wrong file, and `.tests-locked` forbids moving them. **Four** are meaningful
+  Tests that would catch the **table's** holes — the mapper regressions above,
+  not the no-suite list, for which no test exists anywhere — need no key and no
+  network, but live in the wrong file, and `.tests-locked` forbids moving them.
+  **Four** are meaningful
   key-free assertions. Six *pass* keyless, but two of those (T7, T8) only
   short-circuit at `requireApiKey` — measured at 0.26 ms and 0.20 ms keyless
   against 1085.9 ms and 862.7 ms keyed — and their assertions (`isError` true,
@@ -532,12 +534,15 @@ lint or a hook.
   4. Wrote "the first **five** rows are reached by the live file" — in the
      sentence correcting (3). Row five *is* the `humanError` row, so the entry
      contradicted itself two paragraphs apart, in the reassuring direction.
-  5. Said "six key-free assertions are stranded". Six pass keyless; only four
-     assert anything without a key.
+  5. Said "six key-free assertions are stranded". Six pass keyless, but two of
+     those assert only that the missing-key path returns an error — not the 404
+     handling they exist to cover. Four are meaningful.
 
-  Four of the five were caught by an evaluator, not by me, and (4) was written
-  while fixing (3) — the error survived the act of correcting itself. An entry
-  whose whole purpose is to stop a reader trusting a green check kept
+  **All five were caught by an evaluator, not by me**, and (4) was written while
+  fixing (3) — the error survived the act of correcting itself. An earlier
+  version of this paragraph said "four of the five", which was wrong in the one
+  direction that flattered the author, and was itself caught by the evaluator.
+  An entry whose whole purpose is to stop a reader trusting a green check kept
   overstating what the checks assert.
 
   When writing about coverage: measure each claim separately and count against
