@@ -22,14 +22,17 @@ import { describe, it } from "node:test";
 
 const ROOT = new URL("..", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1");
 const README = readFileSync(join(ROOT, "README.md"), "utf8");
+// The process record moved to its own file; the assertions moved with it rather
+// than being relaxed. Helpers take the document so neither is read by accident.
+const PROCESS = readFileSync(join(ROOT, "docs/PROCESS.md"), "utf8");
 const cap = (f) => JSON.parse(readFileSync(join(ROOT, "docs/demo", f), "utf8"));
 const norm = (s) => s.replace(/\s+/g, " ").trim();
 const NL = String.fromCharCode(10);
 
 /** Every two-column table row, as label -> raw right-hand cell. */
-function textCells() {
+function textCells(doc = README) {
   const cells = new Map();
-  for (const line of README.split(NL)) {
+  for (const line of doc.split(NL)) {
     if (!line.trim().startsWith("|")) continue;
     const c = line.split("|").map((x) => x.trim());
     if (c.length >= 4 && c[1] && !c[1].startsWith("-")) {
@@ -47,8 +50,8 @@ function textCells() {
  * caught an unrelated bold bullet elsewhere in the file, so the marathon list is
  * read from its own section only.
  */
-function bulletsUnder(heading) {
-  const at = README.indexOf(heading);
+function bulletsUnder(heading, doc = PROCESS) {
+  const at = doc.indexOf(heading);
   assert.ok(at !== -1, `no section: ${heading}`);
   const out = [];
   let inSection = false;
@@ -62,7 +65,7 @@ function bulletsUnder(heading) {
     out.push(norm(buffer.slice(1, -1)));
     buffer = null;
   };
-  for (const line of README.split(NL)) {
+  for (const line of doc.split(NL)) {
     if (line.startsWith(heading)) { inSection = true; continue; }
     if (!inSection) continue;
     if (line.startsWith("## ") || line.startsWith("### ")) break;
@@ -89,9 +92,9 @@ function countAndPrs(cell) {
 }
 
 /** The README's numeric table rows, as label -> number. */
-function tableRows() {
+function tableRows(doc = README) {
   const rows = new Map();
-  for (const line of README.split(NL)) {
+  for (const line of doc.split(NL)) {
     if (!line.trim().startsWith("|")) continue;
     const c = line.split("|").map((x) => x.trim());
     if (c.length >= 4 && /^[0-9]+$/.test(c[2])) {
@@ -113,10 +116,17 @@ describe("G6 — the submission README", () => {
   });
 
   // AC1 — every relative link resolves
+  // AC1 — every relative link in BOTH documents resolves, each from its own
+  // directory. Checking only the README let four links move into docs/ with a
+  // `docs/` prefix still on them, resolving to docs/docs/ and 404ing.
   it("AC1 every relative link resolves", () => {
-    const links = [...README.matchAll(/\]\((?!https?:)([^)#]+)\)/g)].map((m) => m[1]);
-    assert.ok(links.length > 0, "no relative links found");
-    for (const l of links) assert.ok(existsSync(join(ROOT, l)), `missing: ${l}`);
+    for (const [doc, dir] of [[README, "."], [PROCESS, "docs"]]) {
+      const links = [...doc.matchAll(/\]\((?!https?:)([^)#]+)\)/g)].map((m) => m[1]);
+      assert.ok(links.length > 0, `no relative links found in ${dir} — the scan is broken`);
+      for (const l of links) {
+        assert.ok(existsSync(join(ROOT, dir, l)), `missing from ${dir}/: ${l}`);
+      }
+    }
   });
 
   // AC2 — the self-audit figures come from the capture.
@@ -178,11 +188,13 @@ describe("G6 — the submission README", () => {
   // AC4 — the gate bypasses and both BLOCK-overrides
   it("AC4 failure record is specific", () => {
     for (const pr of ["#10", "#11", "#21", "#28", "#32", "#8"]) {
-      assert.ok(README.includes(pr), `bypass PR ${pr} not named`);
+      assert.ok(PROCESS.includes(pr), `bypass PR ${pr} not named`);
     }
-    assert.ok(/merged over a live evaluator BLOCK/.test(README), "BLOCK-overrides not stated");
-    assert.ok(!/zero BLOCKs\b/.test(README) || /zero BLOCK verdict objects/.test(README),
+    assert.ok(/merged over a live evaluator BLOCK/.test(PROCESS), "BLOCK-overrides not stated");
+    assert.ok(!/zero BLOCKs/.test(PROCESS) || /zero BLOCK verdict objects/.test(PROCESS),
       "unqualified 'zero BLOCKs' — PR #11's body falsifies it");
+    // The README must point at the record it no longer carries.
+    assert.ok(README.includes("docs/PROCESS.md"), "README must link the process record");
   });
 
   // AC4 — the ledger figures in the README come from the ledger
@@ -198,21 +210,21 @@ describe("G6 — the submission README", () => {
       if (c[4] && c[4] !== "—") withFindings++;
     }
     assert.ok(rounds > 0, "no ledger rows parsed — the scan is broken");
-    const rows = tableRows();
+    const rows = tableRows(PROCESS);
     assert.equal(rows.get("evaluation rounds recorded"), rounds);
     assert.equal(rows.get("of which the evaluator returned BLOCK"), blocks);
     assert.equal(rows.get("rounds that produced at least one finding"), withFindings);
     // The plan requires the README to note PR #34's self-undercount rather than
     // quietly use the smaller number.
-    assert.ok(README.includes("Nine rounds. Three BLOCKs."),
+    assert.ok(PROCESS.includes("Nine rounds. Three BLOCKs."),
       "PR #34's undercount must be quoted, not summarised away");
-    assert.ok(README.includes("All five were caught by an evaluator, not by me"),
+    assert.ok(PROCESS.includes("All five were caught by an evaluator, not by me"),
       "AGENTS.md's coverage entry must be quoted");
   });
 
   // AC2 — the counts drawn from STAGE-PLAN.md and AGENTS.md
   it("AC2 correction and mistake-log counts match their files", () => {
-    const rows = tableRows();
+    const rows = tableRows(PROCESS);
     const plan = readFileSync(join(ROOT, "docs/plans/STAGE-PLAN.md"), "utf8");
     // Corrections are numbered list items; the highest number is the count. A
     // naive count of numbered items gives 47, because the open-questions list at
@@ -250,12 +262,12 @@ describe("G6 — the submission README", () => {
     const clean = titles.map((t) => norm(t.split("**")[0]));
     assert.ok(clean.length > 50, `expected the full log, parsed ${clean.length}`);
 
-    const cells = textCells();
+    const cells = textCells(PROCESS);
     const span = cells.get("consecutive entries correcting one guard file");
     assert.ok(span, "no marathon row");
     const [from, to] = span.split("–").map((x) => Number(x.replace(/[^0-9]/g, "")));
     assert.ok(from > 0 && to > from, `unparseable span: ${span}`);
-    assert.equal(tableRows().get("entries in that run"), to - from + 1);
+    assert.equal(tableRows(PROCESS).get("entries in that run"), to - from + 1);
 
     // Every entry the README lists must be inside the span — and the span's own
     // endpoints must be among them. Without the endpoints, any window of the
@@ -275,7 +287,7 @@ describe("G6 — the submission README", () => {
   // AC2 — the census cells that carry a count AND a PR list
   it("AC2 the red-merge and BLOCK-override cells match the fixture", () => {
     const c = JSON.parse(readFileSync(join(ROOT, "docs/pr-census.json"), "utf8"));
-    const cells = textCells();
+    const cells = textCells(PROCESS);
     for (const [label, expected] of [
       ["merged over a red required check", c.mergedOverRedGate],
       ["merged over a live evaluator BLOCK", c.mergedOverLiveBlock],
@@ -303,7 +315,7 @@ describe("G6 — the submission README", () => {
       .split(NL)
       .filter((l) => l.startsWith("- ")).length;
     assert.ok(items > 0, "no items parsed — the scan is broken");
-    assert.equal(tableRows().get("defects the author noticed first"), items);
+    assert.equal(tableRows(PROCESS).get("defects the author noticed first"), items);
   });
 
   // AC3 — every autofix figure is read out of the probe record and required to
@@ -380,7 +392,7 @@ describe("G6 — the submission README", () => {
   // AC2 — every census figure in the README equals the committed fixture
   it("AC2 census figures match docs/pr-census.json", () => {
     const c = JSON.parse(readFileSync(join(ROOT, "docs/pr-census.json"), "utf8"));
-    const rows = tableRows();
+    const rows = tableRows(PROCESS);
     const want = {
       "pull requests opened": c.prsOpened,
       "merged": c.merged,
@@ -393,7 +405,7 @@ describe("G6 — the submission README", () => {
       assert.ok(rows.has(label), `no census row labelled "${label}"`);
       assert.equal(rows.get(label), n, `${label}: README ${rows.get(label)} vs fixture ${n}`);
     }
-    for (const n of c.mergedOverRedGate) assert.ok(README.includes("#" + n), `#${n} not named`);
+    for (const n of c.mergedOverRedGate) assert.ok(PROCESS.includes("#" + n), `#${n} not named`);
     assert.equal(c.blockVerdictObjects.length, 1);
     assert.equal(c.blockVerdictObjects[0].state, "CLOSED");
   });
@@ -414,7 +426,7 @@ describe("G6 — the submission README", () => {
       labels.add(d);
     }
     assert.ok(labels.size > 0, "found no goal labels — the scan is broken, not the plan");
-    const rows = tableRows();
+    const rows = tableRows(PROCESS);
     assert.equal(rows.get("goals recorded in the stage plan"), labels.size,
       `README says ${rows.get("goals recorded in the stage plan")}, STAGE-PLAN names ${labels.size}`);
   });

@@ -50,7 +50,8 @@ renders the real result, and the fail-to-green cycle is reproducible.
 | — | Test discovery replaces enumeration; `test:check` in CI | complete (G6 S0): PRs #34, #35 |
 | — | Submission package — README, ledger, census, 17 tests | complete (G6 S3): PR #37 |
 
-**The plan is complete.** Post-merge audit `6262a04a` against production returns
+**The plan is complete.** Post-merge audit [`6262a04a`](../demo/audit-post-g6.json)
+against production returns
 32 checks, 31 passing, both readiness flags true, and **zero deviations** from the
 `f4022c88` baseline — run through the deployed tools rather than the API.
 

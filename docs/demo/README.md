@@ -5,8 +5,8 @@ that deployment, watching the app catch it, and reverting — every capture take
 from the production server through the deployed `start_audit` / `get_audit`
 tools, never from local dev.
 
-The point is not the screenshot. It is that a one-line defect went through the
-normal gates, was refused twice on the way, and left a trail anyone can re-read.
+A one-line defect went through the normal gates, was refused twice on the way,
+and left a trail anyone can re-read.
 
 ## The sequence
 
@@ -113,7 +113,7 @@ was at fault happened to be correct; it need never have been a hypothesis.
 So the demo produced a finding beyond its own acceptance criteria: **on a failing
 check, read `details`, not just `message`.**
 
-The qualifier is load-bearing. Across all 96 check-records in these three
+Across all 96 check-records in these three
 captures — 32 checks × 3 audits — `details` breaks down as **15 `null`, 77 empty
 arrays, and 4 populated**. It is empty or null on 96% of them, and every one of
 the 4 populated records is a **failing** check. No passing check carries it.
@@ -175,8 +175,8 @@ through the deployed tools while the break was active.
 Stronger than that file, because it is not in this repository at all: **Manufact's
 own record for audit `5309c70b` carries `deploymentId: 918b87d3`**, the break
 deployment. The mapped `get_audit` shape drops that field, so you will not find
-it in `audit-red.json` — refetch the audit from the API and it is there. Nothing
-this repository asserts is load-bearing for it.
+it in `audit-red.json` — refetch the audit from the API and it is there. This
+repository asserts nothing that the API cannot be asked to confirm.
 
 Note also that `/mcp/inspector` is dev-only and 404s on the deployment; the
 hosted Inspector reached from the `/mcp` landing page is what renders a deployed
@@ -186,5 +186,5 @@ view.
 
 Every audit id above is refetchable from Manufact's API. The PR trail, the
 deployment ids, and the merge commits are all in GitHub. Nothing here has to be
-taken on the word of the files in this directory — which is the point, since the
-files in this directory were written by the same agent that ran the demo.
+taken on the word of the files in this directory. The files in this directory
+were written by the same agent that ran the demo.

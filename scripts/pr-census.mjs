@@ -18,7 +18,7 @@ const raw = execFileSync(
 );
 const prs = JSON.parse(raw);
 
-/** The verdict check's LATEST run. Taking the first inverts seven of them. */
+/** The verdict check's LATEST run. Taking the first inverts most of redThenGreen. */
 function verdictRuns(pr) {
   return (pr.statusCheckRollup ?? [])
     .filter((c) => (c.name ?? c.context) === "verdict")
@@ -34,7 +34,7 @@ const passed = merged.filter((p) => latest(p) === "SUCCESS");
 
 process.stdout.write(JSON.stringify({
   regenerateWith: "node scripts/pr-census.mjs > docs/pr-census.json",
-  note: "A pull request's gate result is its LATEST verdict check run. Taking the first inverts seven of them, because a PR opened before its verdict is in the body goes red and then green when the body is edited.",
+  note: "A pull request's gate result is its LATEST verdict check run. Taking the first inverts most of redThenGreen: a PR opened before its verdict is in the body goes red and then green when the body is edited. Do not restate that count here — it is derived below and has already grown once.",
   prsOpened: prs.length,
   merged: merged.length,
   closedUnmerged: nums(prs.filter((p) => p.state === "CLOSED")),
