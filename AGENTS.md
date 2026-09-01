@@ -488,11 +488,24 @@ lint or a hook.
   | `humanError` — 429, 5xx, generic, non-API branches | never executed |
   | `views/audit-report/report.ts` | 100% lines, 100% funcs |
 
-  All of those are reached only by `tests/readiness-tool.test.ts`, the live
-  file. So a regression that stringifies `hint` or drops `errorMessage` — both
-  defects this repo has actually shipped — passes `typecheck`, `build` and
-  `test:pure`, and `fast-checks` goes green. `getAuditHandler` deserves naming
-  beside the mapper: it is what the view calls on every refresh.
+  The first five rows are reached by `tests/readiness-tool.test.ts` — under
+  `test:live`, `index.ts` is 100% lines and `audit-schema.ts` is 100/100/100 —
+  so a regression that stringifies `hint` or drops `errorMessage` (both defects
+  this repo has actually shipped) passes `typecheck`, `build` and `test:pure`
+  with `fast-checks` green, and is caught only by a suite CI never runs.
+  `getAuditHandler` deserves naming beside the mapper: it is what the view calls
+  on every refresh.
+
+  **Some code is executed by no suite at all**, which is worse and easy to miss:
+  `humanError`'s 429, 5xx, generic-4xx and non-API branches (the `test:pure`
+  and `test:live` uncovered ranges intersect there), `manufactFetch`'s
+  non-JSON error-body `catch`, and `resolveActiveDeploymentId`'s
+  null-deployment throw. The live suite only ever produces a 404 and a
+  `MissingApiKeyError`. Concretely: change the `>= 500` branch to return
+  `` `Manufact's API failed (${error.status})` `` — reintroducing the
+  status-code leak T6 exists to prevent for 404 — and `test:pure` is 25/25,
+  `test:live` is 16/16, `fast-checks` is green, and no test anywhere executes
+  that line.
 
   The tests that would catch these need no key and no network. They live in the
   wrong file, and `.tests-locked` forbids moving them — six key-free assertions
@@ -503,8 +516,15 @@ lint or a hook.
   `views/audit-report/view.tsx` is covered by nothing in either suite. That is
   the pre-existing no-DOM limitation, not a consequence of this split.
 
-  An earlier draft of this entry named only the mapper, which left a reader
-  thinking it was the whole hole.
+  **This entry took three evaluation rounds to get right, and all three of my
+  errors ran the same direction — toward implying more coverage than exists.**
+  First it claimed `test:pure` covered the mapper (it covers none of it). Then
+  it named the mapper as the only hole (it is the largest of six). Then it
+  attributed every hole to the live suite, when the `humanError` branches are
+  covered by nothing. An entry whose purpose is to stop a reader trusting a
+  green check kept overstating what the checks assert. When writing about
+  coverage, measure each claim separately; the plausible sentence is the
+  reassuring one, and it is the one that will be wrong.
   Two residuals of the same shape, both wider than they look: the scripts
   enumerate files explicitly, and **no CI job runs the full glob**, so a PR
   adding `tests/foo.test.ts` goes green with that file never executed — and
