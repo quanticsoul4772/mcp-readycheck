@@ -68,7 +68,10 @@ Latest audit of this deployment: `6262a04a` — 32 checks, 31 passing,
 `isReadyForChatgpt` true, `isReadyForClaudeai` true.
 
 The one failing check, `tool-resource-metadata-complete`, requires a
-widget-description field that mcp-use 2.3.3 does not expose. Details in
+widget-description field that mcp-use 2.3.3 does not expose. Manufact's own
+autofix agent read the code and reached the same conclusion; it does not show
+autofix repairing a defect, which would have meant breaking the deployment to
+create one. Details in
 [docs/PROCESS.md](docs/PROCESS.md#the-one-red-check).
 
 ## Deploy
@@ -83,7 +86,7 @@ GitHub-connected; push to `main` deploys.
 
 ```sh
 npm run test:check   # discovery matches the index and CI
-npm run test:pure    # no network, no key
+npm run test:pure    # no network, no key — what CI runs
 npm run test:live    # POSTs real audits; needs MANUFACT_API_KEY
 ```
 

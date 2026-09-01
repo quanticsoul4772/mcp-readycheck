@@ -126,10 +126,27 @@ describe("G6 — the submission README", () => {
   // `docs/` prefix still on them, resolving to docs/docs/ and 404ing.
   it("AC1 every relative link resolves", () => {
     for (const [doc, dir] of [[README, "."], [PROCESS, "docs"]]) {
-      const links = [...doc.matchAll(/\]\((?!https?:)([^)#]+)\)/g)].map((m) => m[1]);
+      // Anchored targets included. Excluding anything containing `#` skipped
+      // README.md's docs/PROCESS.md#the-one-red-check entirely, so pointing it
+      // at a file that does not exist stayed green.
+      const links = [...doc.matchAll(/\]\((?!https?:)([^)\s]+)\)/g)].map((m) => m[1]);
       assert.ok(links.length > 0, `no relative links found in ${dir} — the scan is broken`);
       for (const l of links) {
-        assert.ok(existsSync(join(ROOT, dir, l)), `missing from ${dir}/: ${l}`);
+        const [path, anchor] = l.split("#");
+        assert.ok(existsSync(join(ROOT, dir, path)), `missing from ${dir}/: ${path}`);
+        if (!anchor) continue;
+        // A heading resolves to its slug: lower-cased, non-word runs to hyphens.
+        const target = readFileSync(join(ROOT, dir, path), "utf8");
+        const slugs = target
+          .split(NL)
+          .filter((line) => line.startsWith("#"))
+          // GitHub keeps underscores and strips other punctuation; treating `_`
+          // as a separator computed `start-audit` for `### \`start_audit\`` and
+          // would have failed a link GitHub resolves.
+          .map((line) => line.replace(/^#+\s*/, "").toLowerCase()
+                              .replace(/[^a-z0-9_\s-]/g, "")
+                              .trim().replace(/\s+/g, "-"));
+        assert.ok(slugs.includes(anchor), `no heading in ${path} for anchor #${anchor}`);
       }
     }
   });
@@ -191,6 +208,32 @@ describe("G6 — the submission README", () => {
     const dep = (pkg.dependencies?.["mcp-use"] ?? "").replace(/[^0-9.]/g, "");
     assert.ok(dep.length > 0, "package.json pins no mcp-use version");
     assert.ok(status.includes(`mcp-use ${dep}`), `Status must state mcp-use ${dep}`);
+    // Both documents, not just the README: a bump caught in one and missed in
+    // the other is how the two disagree.
+    for (const [name, doc] of [["README", README], ["PROCESS", PROCESS]]) {
+      // Quoted lines are excluded. They reproduce what Manufact's agent wrote,
+      // and the version in them is part of the record, not a claim this
+      // repository is making about its own dependency. Binding them meant a
+      // dependency bump could only go green by editing a quotation — a rule
+      // that refuses a legitimate change, which is the shape AGENTS.md's
+      // verdict.yml entry warns about.
+      const claims = doc
+        .split(NL)
+        .filter((line) => !line.trimStart().startsWith(">"))
+        .join(NL);
+      const seen = [...claims.matchAll(/mcp-use ([0-9]+\.[0-9]+\.[0-9]+)/g)];
+      assert.ok(seen.length > 0, `${name} states no mcp-use version — the scan is broken`);
+      for (const m of seen) {
+        assert.equal(m[1], dep, `${name} states mcp-use ${m[1]}, package.json pins ${dep}`);
+      }
+    }
+    // The dev port appears in the README twice and is stated once with its
+    // provenance in docs/PROCESS.md; the three must agree.
+    const ports = [...README.matchAll(/port ([0-9]+)|localhost:([0-9]+)/g)]
+      .map((m) => m[1] ?? m[2]);
+    assert.ok(ports.length > 0, "no port stated — the scan is broken");
+    assert.equal(new Set(ports).size, 1, `README states more than one port: ${ports}`);
+    assert.ok(PROCESS.includes(`port ${ports[0]}`), `PROCESS must state port ${ports[0]}`);
 
     // The screenshot's alt text carries the same check count as the capture. It
     // is the one figure in the README that no reader can see is stale, because
@@ -204,16 +247,26 @@ describe("G6 — the submission README", () => {
   // The README was restructured twice, and both times sentences were dropped
   // rather than moved. These are the ones that went missing; asserting them is
   // what makes "moved verbatim" checkable instead of a claim in a commit message.
-  it("the sentences removed from the README are in docs/PROCESS.md", () => {
+  it("no sentence was lost when the README was restructured", () => {
     for (const sentence of [
       "It is its own test case: the server you audit with it is the server serving it.",
       "Views are pure-render",
       "the app trips its own CSP check",
       "Severity gates readiness and warnings do not",
       "The break moved one flag, not both.",
+      // Added by the fix for the round-1 loss, and omitted from this list by
+      // that same fix — so the defect it closed could recur green. That is why
+      // they are here: the list has to grow whenever the move does.
+      "Types are checked with `npm run typecheck`",
+      "verifies discovery against the git",
+      "what CI runs",
     ]) {
-      assert.ok(norm(PROCESS).includes(norm(sentence)),
-        `removed from the README and now in neither document: ${sentence.slice(0, 50)}`);
+      // Either document. The invariant is that the statement still exists
+      // somewhere a reader reaches, not which file holds it — an earlier version
+      // demanded PROCESS.md and failed when a sentence was restored to the
+      // README, which is the wrong direction to fail in.
+      const present = norm(README).includes(norm(sentence)) || norm(PROCESS).includes(norm(sentence));
+      assert.ok(present, `in neither README nor docs/PROCESS.md: ${sentence.slice(0, 50)}`);
     }
   });
 
@@ -408,9 +461,19 @@ describe("G6 — the submission README", () => {
     assert.ok(probe.includes("200 OK") && para.includes("returned 200"),
       "the 200 response must come from the probe record");
     // The quoted conclusion is the whole point of the citation.
-    const quote = "neither `widgetMetadata` nor `openai/widgetDescription` appears in the mcp-use";
-    assert.ok(norm(probe).includes(norm(quote)), "the probe no longer carries the quote");
-    assert.ok(norm(PROCESS).includes(norm(quote)), "the record must quote it verbatim");
+    // The whole passage, version included. Excluding blockquotes from the
+    // dependency check removed the only binding on the version inside this
+    // quotation, so it could be edited to say anything while the probe record
+    // still said 2.3.3. It is bound to that record instead, which is where a
+    // quotation should be checked.
+    const quote = "neither `widgetMetadata` nor `openai/widgetDescription` appears in the mcp-use "
+      + "package. This means the mcp-use 2.3.3 framework doesn't have first-class "
+      + "support for `openai/widgetDescription`.";
+    // Both documents store it as a blockquote, so the `>` markers survive
+    // whitespace normalisation and have to come off before comparing.
+    const unquoted = (doc) => norm(doc.split(NL).map((l) => l.replace(/^\s*>\s?/, "")).join(NL));
+    assert.ok(unquoted(probe).includes(norm(quote)), "the probe no longer carries the quote");
+    assert.ok(unquoted(PROCESS).includes(norm(quote)), "the record must quote it verbatim");
   });
 
   // The ledger's Totals must agree with the rows it summarises. Round 2 found
@@ -447,6 +510,14 @@ describe("G6 — the submission README", () => {
   it("AC5 re-break decision recorded", () => {
     assert.ok(/does \*\*not\*\* show|does not show/.test(PROCESS),
       "the record must state what the probe does not prove");
+    // And the landing page, not only the record it links to: a reader who never
+    // clicks through should still see what the probe does not establish.
+    assert.ok(/does not show/.test(README),
+      "the README must state what the probe does not show");
+    // Both halves. The confirmation could be deleted while the limit stayed,
+    // which is the loss the sentence-loss test exists to catch.
+    assert.ok(/reached the same conclusion/.test(README),
+      "the README must state that Manufact's agent reached the same conclusion");
   });
 
 

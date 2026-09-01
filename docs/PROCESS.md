@@ -16,6 +16,13 @@ Types are checked with `npm run typecheck`, which regenerates `mcp-env.d.ts`
 before running `tsc`. `npm run test:check` verifies discovery against the git
 index, against the npm scripts, and against the CI job.
 
+## Ports and versions
+
+`npm run dev` serves `/mcp` on port 3000 and the Inspector at
+`http://localhost:3000/mcp/inspector`; both are mcp-use's defaults for
+`mcp-use dev`, not settings this repository chooses, and nothing here overrides
+them. The SDK is pinned to mcp-use 2.3.3 in `package.json`.
+
 ## Audits
 
 The self-audit, against the baseline capture:
