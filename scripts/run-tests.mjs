@@ -207,18 +207,35 @@ if (mode === "check") {
   //    own — none do — so each one prints its script and exits 0. npm ci,
   //    typecheck, build and both test steps all report success without running,
   //    and the required check goes green. `env: npm_config_script_shell:
-  //    /bin/true` does the same through npm's config. Both leave all 21 pinned
-  //    lines byte-identical. So the whole file is digested as well, over the
+  //    /bin/true` reaches four of those five through npm's config — npm exec
+  //    routes `npx mcp-use typecheck` through the same script shell, so the
+  //    `npm run` framing undersells it — leaving only `npm ci` to execute.
+  //    Both leave all 21 pinned lines byte-identical. So the whole file is digested as well, over the
   //    same comment-free lines: anything outside the job that can reach into it
   //    changes the digest.
   //
-  //    What this still cannot see is a ruleset that stops requiring
-  //    `fast-checks`, which lives in GitHub's settings rather than in this
-  //    repository. Changing `on:` leaves it silent too, but that is not a way to
-  //    merge green — the required check then never reports at all and the pull
-  //    request stays blocked. Every blind spot named here is of that kind; the
-  //    `defaults:` hole was the first fail-open one found, and it was found by
-  //    an evaluation rather than by this list being complete.
+  //    What this still cannot see:
+  //
+  //      - a ruleset that stops requiring `fast-checks`. That lives in GitHub's
+  //        settings, not in this repository.
+  //      - a second workflow file emitting a check run also named `fast-checks`.
+  //        Only ci.yml is read. Whether GitHub would then resolve the required
+  //        check to the decoy was not established, so this is an unexamined
+  //        surface rather than a known bypass.
+  //      - `test:check` itself. Assertion 3 pins `test:pure` and `test:live`
+  //        exactly, so the ci.yml line pinned here resolves through an unpinned
+  //        package.json entry: repoint `test:check` at `node -e ""` and this
+  //        file never runs to object. Pinning it here buys nothing, because the
+  //        pin would live in the code that no longer runs. It is the same
+  //        circularity AGENTS.md records for integrity.sh — an attester cannot
+  //        attest itself — and it ends where those end, at a human reading the
+  //        diff.
+  //      - changing `on:`, which is silent but not a way to merge green: the
+  //        required check then never reports and the pull request stays blocked.
+  //
+  //    The `defaults:` hole was the first fail-open one found here, and an
+  //    evaluation found it. This list is what has been looked for, not what
+  //    exists.
   const REQUIRED_JOB = "fast-checks";
   const CI_PATH = ".github/workflows/ci.yml";
   const REQUIRED_JOB_BLOCK = [
