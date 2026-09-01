@@ -28,7 +28,9 @@
     "start": "mcp-use start",
     "deploy": "mcp-use deploy",
     "typecheck": "mcp-use typecheck",
-    "test": "node --test \"tests/**/*.test.ts\""
+    "test": "node --test \"tests/**/*.test.ts\"",
+    "test:pure": "node --test tests/audit-report-view.test.ts tests/self-audit-green.test.ts tests/staged-failure-demo.test.ts",
+    "test:live": "node --test tests/readiness-tool.test.ts"
   },
   "dependencies": {
     "mcp-use": "2.3.3",

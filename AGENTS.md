@@ -10,7 +10,7 @@ own deployed URL and renders the result by category. The app is its own test cas
 | dev | `npm run dev` — serves `/mcp` on :3000, Inspector at `/mcp/inspector`. Backgrounded, it detaches; stop it by killing the node process, not just the shell. |
 | build | `npm run build` → `.mcp-use/build/index.js` |
 | typecheck | `npm run typecheck` (regenerates `mcp-env.d.ts`, then `tsc`) |
-| test | `npm test` — `node --test` over `tests/**/*.test.ts`, no test framework dependency. The hook suites are separate: `sh .claude/hooks/*.test.sh` |
+| test | `npm test` — `node --test` over `tests/**/*.test.ts`, no test framework dependency. **`npm run test:pure`** needs no network and no key, and is what CI runs; **`npm run test:live`** POSTs real audits and needs `MANUFACT_API_KEY`. Adding a test file means adding it to one of those two, or it runs under `npm test` alone and never in CI. The hook suites are separate: `sh .claude/hooks/*.test.sh` |
 | deploy | `npx -y mcp-use@latest deploy -y` (GitHub-connected). Never run it to "check something". |
 
 ## Stack facts
@@ -454,3 +454,115 @@ lint or a hook.
   per line — `while IFS= read -r p` over a heredoc, which keeps the loop in the
   current shell so a refusal can still `exit 2`. Found by running the suite; the
   code read fine.
+- **CI ran no tests at all, and a staged break proved it.** `fast-checks` ran
+  `typecheck` and `build` and stopped there. G4's deliberate one-line defect
+  passed both and would have shipped green; the frozen suite caught it locally
+  and the live audit caught it after deploy, and CI caught it at neither end.
+  `test:pure` is in the job now. When a job is named for speed, check what it
+  actually asserts before trusting it as a gate.
+- **Live tests never run in CI, and that is deliberate.** `test:live` POSTs real
+  audits against the deployed server, so every push would create a billed audit
+  record, and the workflow would need `MANUFACT_API_KEY` in its environment.
+  (An earlier draft of this entry also claimed the secret would be "readable on
+  a fork's pull request". That is wrong: GitHub withholds repository secrets
+  from fork `pull_request` runs — the exposure needs `pull_request_target`,
+  which no workflow here uses. The billed-record reason stands on its own.)
+  The split is `test:pure` (view transforms, tool-definition assertions, error
+  mapping, capture consistency) and `test:live` (the Manufact API). Verified by
+  execution: with the key unset, `test:pure` is 25/25 and `test:live` fails five
+  tests with `MissingApiKeyError`. An evaluation went further and re-ran
+  `test:pure` under a preload that throws on any non-local DNS lookup — still
+  25/25, while the same preload fired five times on `cloud.manufact.com` against
+  `test:live`. The no-network property is proven, not assumed; re-run that if
+  the classification ever changes.
+- **CI coverage has holes, and `lib/audit-schema.ts` is the largest, not the
+  only one.** Measured with `node --experimental-test-coverage` over
+  `test:pure`:
+
+  | unit | under `test:pure` |
+  |---|---|
+  | `lib/audit-schema.ts` — `mapAuditResponse`, `auditOutputSchema` | **funcs 0.00%** |
+  | `index.ts` — `getAuditHandler` | never executed |
+  | `lib/manufact.ts` — `createAudit`, `fetchAudit` | never executed |
+  | `startAuditHandler` success path, `manufactFetch` 2xx return | never executed |
+  | `humanError` — 429, 5xx, generic, non-API branches | never executed |
+  | `views/audit-report/report.ts` | 100% lines, 100% funcs |
+
+  The first four rows are reached by `tests/readiness-tool.test.ts` — under
+  `test:live`, `index.ts` is 100% lines and `audit-schema.ts` is 100/100/100 —
+  so a regression that stringifies `hint` or drops `errorMessage` (both defects
+  this repo has actually shipped) passes `typecheck`, `build` and `test:pure`
+  with `fast-checks` green, and is caught only by a suite CI never runs.
+  `getAuditHandler` deserves naming beside the mapper: it is what the view calls
+  on every refresh.
+
+  **Some code is executed by no suite at all**, which is worse and easy to miss:
+  `humanError`'s 429, 5xx, generic-4xx and non-API branches (the `test:pure`
+  and `test:live` uncovered ranges intersect there), `manufactFetch`'s
+  non-JSON error-body `catch`, and `resolveActiveDeploymentId`'s
+  null-deployment throw. The live suite only ever produces a 404 and a
+  `MissingApiKeyError`. Concretely: change the `>= 500` branch to return
+  `` `Manufact's API failed (${error.status})` `` — reintroducing the
+  status-code leak T6 exists to prevent for 404 — and `test:pure` is 25/25,
+  `test:live` is 16/16, `fast-checks` is green, and no test anywhere executes
+  that line.
+
+  Tests that would catch the **table's** holes — the mapper regressions above,
+  not the no-suite list, for which no test exists anywhere — need no key and no
+  network, but live in the wrong file, and `.tests-locked` forbids moving them.
+  **Four** are meaningful
+  key-free assertions. Six *pass* keyless, but two of those (T7, T8) only
+  short-circuit at `requireApiKey` — measured at 0.26 ms and 0.20 ms keyless
+  against 1085.9 ms and 862.7 ms keyed — and their assertions (`isError` true,
+  non-empty text) are satisfied by `MissingApiKeyError` exactly as well as by
+  the 404 they were written for. Moving all six would put two tests in CI that
+  assert nothing about the absent-id handling they exist to cover, while looking
+  like they do. Routing around the lock to raise a coverage number is the exact
+  behavior the lock exists to make visible, so they stay put and are recorded
+  here instead.
+
+  `views/audit-report/view.tsx` is covered by nothing in either suite. That is
+  the pre-existing no-DOM limitation, not a consequence of this split.
+
+  **This entry took five evaluation rounds, and every one of my errors ran the
+  same direction — toward implying more coverage than exists.**
+
+  1. Claimed `test:pure` covered the mapper. It covers none of it.
+  2. Named the mapper as the only hole. It is the largest of six.
+  3. Attributed every hole to the live suite. The `humanError` branches are
+     covered by nothing.
+  4. Wrote "the first **five** rows are reached by the live file" — in the
+     sentence correcting (3). Row five *is* the `humanError` row, so the entry
+     contradicted itself two paragraphs apart, in the reassuring direction.
+  5. Said "six key-free assertions are stranded". Six pass keyless, but two of
+     those assert only that the missing-key path returns an error — not the 404
+     handling they exist to cover. Four are meaningful.
+
+  **All five were caught by an evaluator, not by me**, and (4) was written while
+  fixing (3) — the error survived the act of correcting itself. An earlier
+  version of this paragraph said "four of the five", which was wrong in the one
+  direction that flattered the author, and was itself caught by the evaluator.
+  An entry whose whole purpose is to stop a reader trusting a green check kept
+  overstating what the checks assert.
+
+  When writing about coverage: measure each claim separately and count against
+  the artifact rather than summarizing it. The plausible sentence is the
+  reassuring one, and it is the one that will be wrong.
+  Two residuals of the same shape, both wider than they look: the scripts
+  enumerate files explicitly, and **no CI job runs the full glob**, so a PR
+  adding `tests/foo.test.ts` goes green with that file never executed — and
+  `tests-guard.sh` deliberately permits creating a new unapproved test file, so
+  that is a reachable path rather than a hypothetical. A default-include layout
+  (`tests/live/` for the live suite, a glob for everything else) closes both.
+- **A revert branch cut from a squash-merged commit is a no-op merge.** If the
+  commit being undone was squashed or rebased onto the default branch, it is not
+  an ancestor of it. The revert branch's merge base stays behind, the three-way
+  merge resolves the file in the default branch's favour, and the revert PR
+  merges **green while changing nothing** — reporting success against a state it
+  did not fix. When a later PR must undo an earlier one, merge the earlier one
+  with a merge commit, and check `git merge-base --is-ancestor <commit> main`
+  before relying on the revert. The mechanism was derived and confirmed, not
+  observed: STAGE-PLAN correction 36 records a **near-miss**, caught by an
+  evaluator before the break was pushed, and `git merge-base --is-ancestor
+  e181bd6 main` returns true because PR #27 was merged with a merge commit. No
+  no-op merge ever occurred here. The rule is preventive.
