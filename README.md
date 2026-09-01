@@ -1,83 +1,98 @@
 # mcp-readycheck
 
-An MCP App that runs Manufact's publishing checks against its own deployed URL
-and renders the result by category. It is its own test case: the server you
-audit with it is the server serving it.
+[![CI](https://github.com/quanticsoul4772/mcp-readycheck/actions/workflows/ci.yml/badge.svg)](https://github.com/quanticsoul4772/mcp-readycheck/actions/workflows/ci.yml)
 
-## The self-audit
+An MCP App that runs Manufact's publishing checks against its own
+deployed URL and renders the report by category.
 
-Audit [`f4022c88`](docs/demo/baseline-f4022c88.json), the current baseline:
+Live endpoint: `https://mcp-readycheck.run.mcp-use.com/mcp`
 
-| | |
-|---|---|
-| checks | 32 |
-| passing | 31 |
-| failing | 1, severity `warning` |
-| `isReadyForChatgpt` | **true** |
-| `isReadyForClaudeai` | **true** |
+## Background
 
-Severity gates readiness and warnings do not, so both flags are true with one
-check red.
+Publishing an MCP app to ChatGPT or Claude fails on things that do not
+surface in local testing: CSP allowlists, tool annotations, resource
+metadata. Manufact's publishing checks report those before submission.
+This app runs those checks against its own deployment and shows the
+result.
 
-### The one red check, and why it stays red
+## Install
 
-`tool-resource-metadata-complete` — "1 resource(s) have incomplete metadata",
-scope `view`, on `ui://views/audit-report.html`. Its hint says to set the widget
-description in `widgetMetadata`, or `_meta.ui.widgetDescription`.
+```sh
+git clone https://github.com/quanticsoul4772/mcp-readycheck
+cd mcp-readycheck
+npm install
+```
 
-Neither string appears in any file of mcp-use 2.3.3. `buildResourceUiMeta` emits
-exactly `csp`, `permissions`, `domain` and `prefersBorder`. There is no code path
-in this repository that can satisfy the check.
+Requires Node 22.22.2 or later.
 
-That is this repository's conclusion. It is also **Manufact's own conclusion**.
-[The autofix probe](docs/demo/autofix-probe.md) POSTed Manufact's autofix at this
-exact failure. It returned 200, ran a coding agent with repository access
-for 6 minutes 48 seconds over 200 events, called `Bash` 87 times and `Read`
-twice, made **zero** `Edit`/`Write` calls and **zero** git mutations, and
-recorded, in its own words:
+## Usage
 
-> neither `widgetMetadata` nor `openai/widgetDescription` appears in the mcp-use
-> package. This means the mcp-use 2.3.3 framework doesn't have first-class
-> support for `openai/widgetDescription`.
+```sh
+npm run dev
+```
 
-A different agent, reasoning from the code, reached the finding this project had
-recorded two goals before the probe ran, in G3. What the probe does **not** show is autofix fixing
-something and opening a merged pull request; producing that would have meant
-breaking production on purpose to create a defect it could fix.
+Serves `/mcp` on port 3000. Inspector at `http://localhost:3000/mcp/inspector`.
 
-## The staged-failure demo
+Set `MANUFACT_API_KEY` in the environment. Without it every tool call
+returns an error and sends no request.
 
-[`docs/demo/README.md`](docs/demo/README.md) — a one-line defect was shipped to
-production deliberately, the app's own audit caught it, and the revert restored
-the baseline. Both audits are captured.
+![audit-report view showing 32 checks, both badges green](docs/demo/screenshot-green-view.jpg)
 
-| | audit | `isReadyForChatgpt` |
+## API
+
+### `start_audit`
+
+Starts a publishing-check audit for a server.
+
+| input | type | |
 |---|---|---|
-| broken | [`5309c70b`](docs/demo/audit-red.json) | **false** |
-| reverted | [`a8c78006`](docs/demo/audit-green.json) | true |
+| `serverId` | string | Manufact server id |
 
-`isReadyForClaudeai` stayed `true` on both. The break moved one flag, not both.
+Returns `{ auditId, status }`. Renders the `audit-report` view.
 
-Break: [#27](https://github.com/quanticsoul4772/mcp-readycheck/pull/27) ·
-revert: [#28](https://github.com/quanticsoul4772/mcp-readycheck/pull/28)
+### `get_audit`
 
-## The endpoint
+Reads an audit's current state.
 
-    https://mcp-readycheck.run.mcp-use.com/mcp
+| input | type | |
+|---|---|---|
+| `serverId` | string | Manufact server id |
+| `auditId` | string | id returned by `start_audit` |
 
-Two tools. `start_audit` POSTs an audit for a server id and returns the audit id;
-`get_audit` fetches one and renders it by category. Views are pure-render — every
-network call happens server-side in the handler, or the app trips its own CSP
-check.
+Returns `{ auditId, status, isReadyForChatgpt, isReadyForClaudeai,
+targetUrl, errorMessage, checks[] }`. App-only; called by the view.
 
-## Development
+## Status
 
-    npm install
-    npm run dev          # /mcp on :3000, Inspector at /mcp/inspector
-    npm run typecheck
-    npm run test:check   # discovery matches the index, CI, and the npm scripts
-    npm run test:pure    # no network, no key — what CI runs
-    npm run test:live    # POSTs real audits; needs MANUFACT_API_KEY
+Latest audit of this deployment: `6262a04a` — 32 checks, 31 passing,
+`isReadyForChatgpt` true, `isReadyForClaudeai` true.
 
-Process record, pull-request census, and known residuals:
-[docs/PROCESS.md](docs/PROCESS.md).
+The one failing check, `tool-resource-metadata-complete`, requires a
+widget-description field that mcp-use 2.3.3 does not expose. Details in
+[docs/PROCESS.md](docs/PROCESS.md#the-one-red-check).
+
+## Deploy
+
+```sh
+npx -y mcp-use@latest deploy -y
+```
+
+GitHub-connected; push to `main` deploys.
+
+## Test
+
+```sh
+npm run test:check   # discovery matches the index and CI
+npm run test:pure    # no network, no key
+npm run test:live    # POSTs real audits; needs MANUFACT_API_KEY
+```
+
+## Documentation
+
+- [docs/demo/README.md](docs/demo/README.md) — staged-failure demo: break,
+  red audit, revert, green audit
+- [docs/demo/autofix-probe.md](docs/demo/autofix-probe.md) — Manufact
+  autofix run against the failing check
+- [docs/PROCESS.md](docs/PROCESS.md) — process record, pull-request
+  census, known residuals
+- [AGENTS.md](AGENTS.md) — conventions and mistake log
