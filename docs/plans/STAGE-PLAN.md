@@ -45,7 +45,8 @@ renders the real result, and the fail-to-green cycle is reproducible.
 | 9 | Readiness widget — one View, grouped by category | complete (G2) |
 | 10 | Redeploy and self-audit green | complete (G3): green baseline `f4022c88`, 31/32 |
 | 11 | Staged one-line failure, red to green | complete (G4): `docs/demo/`, red `5309c70b` → green `a8c78006` |
-| 12 | Autofix trigger surfacing the PR link (optional) | next (G5) |
+| 12 | Autofix trigger surfacing the PR link (optional) | probed (G5): autofix declined to fix the SDK gap, no PR — `docs/demo/autofix-probe.md` |
+| — | CI actually runs tests (`test:pure`), test split | complete (G5) |
 
 Stages 8 onward run the operating cycle: issue with Default-FAIL criteria →
 plan file → **Gate A** → `.tests-locked` → TDD → evaluator → CI → **Gate B**.
@@ -286,6 +287,39 @@ stages that follow.
     was chosen for is exactness, and identical tree SHAs prove that more directly
     — a `git revert` with a hand-resolved conflict is not guaranteed exact, a
     matching tree hash is.
+
+## Corrections added by G5
+
+41. **Autofix is a coding agent, and it declined to invent a fix.** POSTing
+    autofix against green audit `a8c78006` returned **200**, not the documented
+    `422 "audit not fixable"` — the prediction recorded before the call was
+    wrong about the mechanism. A real agent then ran 6m48s over a clone of the
+    repo, made **zero** `Edit`/`Write` calls and **zero** mutating git commands,
+    and concluded from the code that "neither `widgetMetadata` nor
+    `openai/widgetDescription` appears in the mcp-use package". That is
+    correction 26, derived independently. The job then failed on a GitHub
+    PR-creation error (`field: head, code: invalid`) because there was no branch
+    to open a PR from. Full record: `docs/demo/autofix-probe.md`.
+42. **CI asserted nothing for the project's whole life, and a staged break is
+    what proved it.** `fast-checks` ran `typecheck` and `build` only. G4's
+    deliberate defect passed both. When a job is named for speed, read what it
+    executes before treating it as a gate — the name is not the contract.
+43. **Coverage claims must be measured per claim, not summarized.** One
+    mistake-log entry about CI coverage took six evaluation rounds, and every
+    error ran the same direction: toward implying more coverage than exists.
+    The fourth was introduced *by the sentence fixing the third*; the sixth was
+    claiming "four of five errors were caught by an evaluator" when all six
+    were. An entry written to stop a reader trusting a green check kept
+    overstating what the checks assert. Count against the artifact rather than
+    describing it.
+44. **A goal can name a defect that is not there.** G5's S1 specified a
+    `stop_hook_active` fix to a Stop hook. The repo's only Stop hook exits 0 on
+    every path and cannot block; the five hooks that can block are user-global
+    and already contained that exact guard; and the hook that actually looped
+    was the harness's own `/goal` evaluator, which is not a file in either
+    location. Writing the plausible edit would have produced a PR, an
+    evaluation and a merge that fixed nothing. Verify the defect exists before
+    fixing it, and say so plainly when it does not.
 
 ## Invariants
 
