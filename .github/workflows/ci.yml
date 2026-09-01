@@ -43,5 +43,17 @@ jobs:
       # G4's staged break sailed through CI green: `fast-checks` never executed a
       # single test. The frozen suite caught that defect locally and the live
       # audit caught it after deploy; CI caught it at no point.
+
+      # Cross-checks discovery against the git index, refuses npm scripts that
+      # stop routing through scripts/run-tests.mjs, and checks each file's suite
+      # against how it behaves with no key: a file CI runs must pass without one,
+      # and a file held out of CI must fail without one AND name the key as what
+      # it is missing. That last clause is not decoration — without it a test
+      # asserting 1 + 1 === 3 could be named in LIVE and executed by no CI job
+      # with the build green, which an evaluation demonstrated. The first draft
+      # of this step compared discovery against itself and could never fail.
+      - name: Test discovery is complete
+        run: npm run test:check
+
       - name: Test (pure)
         run: npm run test:pure

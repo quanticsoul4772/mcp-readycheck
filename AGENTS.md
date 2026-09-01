@@ -10,7 +10,7 @@ own deployed URL and renders the result by category. The app is its own test cas
 | dev | `npm run dev` — serves `/mcp` on :3000, Inspector at `/mcp/inspector`. Backgrounded, it detaches; stop it by killing the node process, not just the shell. |
 | build | `npm run build` → `.mcp-use/build/index.js` |
 | typecheck | `npm run typecheck` (regenerates `mcp-env.d.ts`, then `tsc`) |
-| test | `npm test` — `node --test` over `tests/**/*.test.ts`, no test framework dependency. **`npm run test:pure`** needs no network and no key, and is what CI runs; **`npm run test:live`** POSTs real audits and needs `MANUFACT_API_KEY`. Adding a test file means adding it to one of those two, or it runs under `npm test` alone and never in CI. The hook suites are separate: `sh .claude/hooks/*.test.sh` |
+| test | `npm test` — `node --test` over `tests/**/*.test.ts`, no test framework dependency. **`npm run test:pure`** needs no network and no key, and is what CI runs; **`npm run test:live`** POSTs real audits and needs `MANUFACT_API_KEY`. Both suites discover `tests/**/*.test.ts` through `scripts/run-tests.mjs`; a new file runs in CI as soon as it is committed. `npm run test:check` refuses a discovery that disagrees with the git index, npm scripts that stop routing through the runner, a CI-run file that fails with no key, and a held-out file whose failure never names the key — LIVE is for credentials, not quarantine. The hook suites are separate: `sh .claude/hooks/*.test.sh` |
 | deploy | `npx -y mcp-use@latest deploy -y` (GitHub-connected). Never run it to "check something". |
 
 ## Stack facts
@@ -548,12 +548,26 @@ lint or a hook.
   When writing about coverage: measure each claim separately and count against
   the artifact rather than summarizing it. The plausible sentence is the
   reassuring one, and it is the one that will be wrong.
-  Two residuals of the same shape, both wider than they look: the scripts
-  enumerate files explicitly, and **no CI job runs the full glob**, so a PR
-  adding `tests/foo.test.ts` goes green with that file never executed — and
-  `tests-guard.sh` deliberately permits creating a new unapproved test file, so
-  that is a reachable path rather than a hypothetical. A default-include layout
-  (`tests/live/` for the live suite, a glob for everything else) closes both.
+  Two residuals of the same shape were recorded here — the scripts enumerated
+  files explicitly, and no CI job ran the full glob, so a PR adding
+  `tests/foo.test.ts` went green with that file never executed, which
+  `tests-guard.sh` makes reachable by design since it permits creating a new
+  unapproved test file. **Both are closed**: `scripts/run-tests.mjs` discovers
+  by default-include and `test:check` runs in CI. Not by the `tests/live/`
+  layout suggested here, which needs a write to a locked test file; by a named
+  LIVE list whose membership `check` verifies against each file's keyless
+  behavior. Every draft of that check was defeated by executing it, never by
+  reading it, and the list is the point rather than its length. Draft 1 asserted
+  that `pure` and `live` partition the discovered list — complementary filters
+  over it, so the branch was unreachable; 512 constructed inputs fired it zero
+  times. Draft 2 required a LIVE file to fail without a key but not to fail
+  *because* of one, so a test asserting `1 + 1 === 3` was named in LIVE and ran
+  in no CI job with the check green. Draft 3 matched the string
+  `MANUFACT_API_KEY` anywhere in the output, which a failing assertion message
+  can simply contain. Draft 4 matches the thrown `MissingApiKeyError` instead;
+  writing *that* into an assertion message still defeats it, and nothing here
+  closes that. The commit that adds `scripts/run-tests.mjs` carries the same
+  list in its message, with what each evaluation did to break it.
 - **A revert branch cut from a squash-merged commit is a no-op merge.** If the
   commit being undone was squashed or rebased onto the default branch, it is not
   an ancestor of it. The revert branch's merge base stays behind, the three-way
