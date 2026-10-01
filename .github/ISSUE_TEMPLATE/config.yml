@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/quanticsoul4772/mcp-readycheck/security/advisories/new
+    about: Please report security vulnerabilities privately through a security advisory instead of opening a public issue. See SECURITY.md for details.
+  - name: Contribution guidelines
+    url: https://github.com/quanticsoul4772/mcp-readycheck/blob/main/CONTRIBUTING.md
+    about: Read how to contribute, set up the project, and submit changes before opening an issue or pull request.
+  - name: Usage and documentation
+    url: https://github.com/quanticsoul4772/mcp-readycheck/blob/main/README.md
+    about: Check the README for installation and usage instructions before asking a question.
