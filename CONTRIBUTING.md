@@ -4,6 +4,8 @@ Thanks for your interest in contributing. This guide covers how to set up a
 development environment, run the checks CI runs on every pull request, and
 submit your changes.
 
+By participating, you agree to abide by our [Code of Conduct](CODE_OF_CONDUCT.md).
+
 ## Development environment setup
 
 ### Prerequisites
@@ -56,4 +58,5 @@ repeating them here:
 - [README.md](README.md) — project overview and usage.
 - [AGENTS.md](AGENTS.md) — working conventions for the repository.
 - [CLAUDE.md](CLAUDE.md) — guidance for Claude Code when working in the repo.
+- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) — community behavioral standards.
 - [LICENSE](LICENSE) — the license your contributions are released under.
