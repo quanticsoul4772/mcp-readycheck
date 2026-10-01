@@ -1,0 +1,5 @@
+# CODEOWNERS
+# This file maps repository paths to the GitHub users or teams responsible for reviewing them.
+# GitHub uses it to automatically request reviews on pull requests that touch matching paths.
+
+* @quanticsoul4772
